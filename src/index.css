@@ -1,0 +1,293 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #F9FAFB;
+  --bg-secondary: #F3F4F6;
+  --bg-surface: #E5E7EB;
+  --bg-hover: #D1D5DB;
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+  --accent: #2563EB;
+  --accent-hover: #1D4ED8;
+  --border: #D1D5DB;
+  --sidebar-bg: rgba(243, 244, 246, 0.85);
+  --success: #059669;
+  --error: #DC2626;
+  --warning: #D97706;
+  --selection: rgba(37, 99, 235, 0.12);
+  --scrollbar-thumb: rgba(107, 114, 128, 0.18);
+  --scrollbar-thumb-hover: rgba(107, 114, 128, 0.3);
+  --gutter-bg: rgba(243, 244, 246, 0.7);
+}
+
+.dark {
+  --bg-primary: #1e1e2e;
+  --bg-secondary: #181825;
+  --bg-surface: #313244;
+  --bg-hover: #45475a;
+  --text-primary: #cdd6f4;
+  --text-secondary: #a6adc8;
+  --accent: #89b4fa;
+  --accent-hover: #74c7ec;
+  --border: #45475a;
+  --sidebar-bg: rgba(30, 30, 46, 0.8);
+  --success: #a6e3a1;
+  --error: #f38ba8;
+  --warning: #fab387;
+  --selection: rgba(137, 180, 250, 0.2);
+  --scrollbar-thumb: rgba(205, 214, 244, 0.15);
+  --scrollbar-thumb-hover: rgba(205, 214, 244, 0.25);
+  --gutter-bg: rgba(24, 24, 37, 0.6);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--selection);
+  color: var(--text-primary);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Glass effect */
+.glass {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: var(--sidebar-bg);
+}
+
+/* Smooth transitions */
+.transition-smooth {
+  transition: all 200ms ease;
+}
+
+a,
+button,
+input,
+textarea,
+select {
+  transition: all 200ms ease;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Focus styles */
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--selection);
+}
+
+/* Remove button default styles */
+button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+/* CodeMirror overrides - 字体大小从外层继承 */
+.cm-editor {
+  height: 100%;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.cm-editor .cm-scroller {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.cm-editor .cm-content {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.cm-editor .cm-gutters {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.cm-editor.cm-focused {
+  outline: none;
+}
+
+.cm-editor .cm-gutters {
+  background: var(--gutter-bg);
+  border-right: 1px solid var(--border);
+}
+
+.cm-editor .cm-activeLineGutter {
+  background: transparent;
+}
+
+.cm-editor .cm-activeLine {
+  background: var(--selection);
+}
+
+.cm-editor .cm-selectionBackground {
+  background: var(--selection) !important;
+}
+
+.cm-editor .cm-cursor {
+  border-left-color: var(--accent);
+  border-left-width: 2px;
+}
+
+.cm-editor .cm-matchingBracket {
+  background: var(--selection);
+  outline: 1px solid var(--accent);
+}
+
+/* Tooltip styles */
+.cm-tooltip {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  color: var(--text-primary);
+}
+
+.cm-tooltip-autocomplete > ul > li {
+  padding: 4px 8px;
+}
+
+.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+
+/* Panel styles */
+.cm-panel {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.cm-panel input {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.cm-panel button {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+
+.cm-panel label {
+  color: var(--text-secondary);
+}
+
+/* Diffs */
+.diff-added {
+  background: rgba(166, 227, 161, 0.15);
+  border-left: 3px solid var(--success);
+}
+
+.diff-removed {
+  background: rgba(243, 139, 168, 0.15);
+  border-left: 3px solid var(--error);
+}
+
+.diff-neutral {
+  border-left: 3px solid transparent;
+}
+
+/* Utility classes */
+.line-clamp-1 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
