@@ -106,9 +106,9 @@ export default function ToolsPanel() {
         ))}
       </div>
 
-      <div style={{ flex: 1, overflow: "auto", padding: 12 }}>
+      <div style={{ flex: 1, overflow: "auto", padding: 12, display: "flex", flexDirection: "column" }}>
         {activeTool === "json" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
             <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
               输入 JSON，结果将打开新标签显示
             </div>
@@ -116,7 +116,7 @@ export default function ToolsPanel() {
               value={jsonInput}
               onChange={(e) => setJsonInput(e.target.value)}
               placeholder="粘贴 JSON 内容..."
-              style={{ width: "100%", height: 180, padding: 8, fontSize: 12, fontFamily: "monospace", background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-primary)", resize: "vertical" }}
+              style={{ flex: 1, width: "100%", minHeight: 180, padding: 8, fontSize: 12, fontFamily: "monospace", background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-primary)", resize: "none" }}
             />
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               <button
@@ -154,7 +154,7 @@ export default function ToolsPanel() {
         )}
 
         {activeTool === "base64" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
             <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
               输入文本，结果将打开新标签显示
             </div>
@@ -162,7 +162,7 @@ export default function ToolsPanel() {
               value={b64Input}
               onChange={(e) => setB64Input(e.target.value)}
               placeholder="输入文本..."
-              style={{ width: "100%", height: 150, padding: 8, fontSize: 12, fontFamily: "monospace", background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-primary)", resize: "vertical" }}
+              style={{ flex: 1, width: "100%", minHeight: 150, padding: 8, fontSize: 12, fontFamily: "monospace", background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-primary)", resize: "none" }}
             />
             <div style={{ display: "flex", gap: 4 }}>
               <button

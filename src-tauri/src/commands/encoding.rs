@@ -7,6 +7,36 @@ pub struct EncodingInfo {
     pub description: String,
 }
 
+fn encoding_for(name: &str) -> &'static encoding_rs::Encoding {
+    match name.to_uppercase().as_str() {
+        "UTF-8" | "UTF8" => encoding_rs::UTF_8,
+        "UTF-16LE" | "UTF16LE" => encoding_rs::UTF_16LE,
+        "UTF-16BE" | "UTF16BE" => encoding_rs::UTF_16BE,
+        "GBK" | "GB2312" => encoding_rs::GBK,
+        "GB18030" => encoding_rs::GB18030,
+        "SHIFT_JIS" | "SHIFT-JIS" => encoding_rs::SHIFT_JIS,
+        "EUC-KR" => encoding_rs::EUC_KR,
+        "BIG5" => encoding_rs::BIG5,
+        "LATIN-1" | "ISO-8859-1" | "WINDOWS-1252" => encoding_rs::WINDOWS_1252,
+        "ASCII" => encoding_rs::UTF_8,
+        _ => encoding_rs::UTF_8,
+    }
+}
+
+/// 把字符串按 from 编码序列化为字节，再用 to 编码解码回字符串。
+/// 用于在编辑器中切换编码：例如把被错误解码成 GBK 的文本按字节还原后用 UTF-8 重新解读。
+#[tauri::command]
+pub fn transcode_text(content: String, from: String, to: String) -> Result<String, String> {
+    if from.eq_ignore_ascii_case(&to) {
+        return Ok(content);
+    }
+    let from_enc = encoding_for(&from);
+    let to_enc = encoding_for(&to);
+    let (bytes, _, _) = from_enc.encode(&content);
+    let (decoded, _, _) = to_enc.decode(&bytes);
+    Ok(decoded.into_owned())
+}
+
 #[tauri::command]
 pub fn detect_encoding(path: String) -> Result<String, String> {
     let bytes = std::fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))?;

@@ -33,6 +33,8 @@ interface EditorStore {
   setActiveSidebarView: (view: EditorStore["activeSidebarView"]) => void;
   openFolder: string | null;
   setOpenFolder: (path: string | null) => void;
+  markdownPreviewVisible: boolean;
+  toggleMarkdownPreview: () => void;
 }
 
 export const useEditorStore = create<EditorStore>((set) => ({
@@ -49,6 +51,10 @@ export const useEditorStore = create<EditorStore>((set) => ({
   activeSidebarView: "tabs",
   openFolder: null,
   editorView: null,
+  markdownPreviewVisible: false,
+
+  toggleMarkdownPreview: () =>
+    set((s) => ({ markdownPreviewVisible: !s.markdownPreviewVisible })),
 
   setEditorView: (view) => set({ editorView: view }),
 

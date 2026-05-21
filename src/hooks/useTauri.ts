@@ -11,6 +11,34 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
   }
 }
 
+/**
+ * 浏览器端尽力转码：把 content 按 from 编码的字节还原，再用 to 编码解读。
+ * TextEncoder 只支持 UTF-8，所以 from 只能是 UTF-8。
+ * TextDecoder 支持大部分常见编码，用作 to 通常是够的。
+ * 对于 from 非 UTF-8 的场景，开发模式下原样返回（需要 Tauri 后端）。
+ */
+function browserTranscode(content: string, from: string, to: string): string {
+  if (from.toLowerCase() === to.toLowerCase()) return content;
+  try {
+    // Step 1: 把当前字符串按 from 编码序列化为字节
+    // TextEncoder 只支持 UTF-8，所以 from 必须是 UTF-8 才能正确回编
+    let bytes: Uint8Array;
+    if (from.toUpperCase() === "UTF-8" || from.toUpperCase() === "UTF8") {
+      bytes = new TextEncoder().encode(content);
+    } else {
+      // 非 UTF-8 的 from 在纯浏览器端无法可靠回编，直接返回原文
+      console.warn(`[transcode] 浏览器端不支持从 ${from} 编码，需 Tauri 后端`);
+      return content;
+    }
+    // Step 2: 用 to 编码解读这些字节
+    const decoder = new TextDecoder(to, { fatal: false });
+    return decoder.decode(bytes);
+  } catch (e) {
+    console.warn("[transcode] 转码失败:", e);
+    return content;
+  }
+}
+
 function getMockData<T>(cmd: string, args?: Record<string, unknown>): T {
   switch (cmd) {
     case "list_encodings":
@@ -23,6 +51,12 @@ function getMockData<T>(cmd: string, args?: Record<string, unknown>): T {
         { name: "Latin-1", label: "Latin-1", description: "西欧" },
         { name: "ASCII", label: "ASCII", description: "美式 ASCII" },
       ] as T;
+    case "transcode_text":
+      return browserTranscode(
+        (args?.content as string) ?? "",
+        (args?.from as string) ?? "UTF-8",
+        (args?.to as string) ?? "UTF-8"
+      ) as T;
     case "detect_encoding":
       return "UTF-8" as T;
     case "list_directory":
@@ -115,6 +149,10 @@ export function useTauri() {
     return invoke<Array<{ name: string; label: string; description: string }>>("list_encodings");
   }, []);
 
+  const transcodeText = useCallback(async (content: string, from: string, to: string) => {
+    return invoke<string>("transcode_text", { content, from, to });
+  }, []);
+
   const gitStatus = useCallback(async (repoPath: string) => {
     return invoke<Array<{ path: string; status: string; staged: boolean }>>("git_status", { repoPath });
   }, []);
@@ -138,6 +176,7 @@ export function useTauri() {
     searchInDir,
     detectEncoding,
     listEncodings,
+    transcodeText,
     gitStatus,
     gitDiff,
     revealInFinder,

@@ -1,8 +1,9 @@
 import React from "react";
-import { Save, Minus, Plus } from "lucide-react";
+import { Save, Minus, Plus, Eye, EyeOff } from "lucide-react";
 import Dropdown from "@/components/Common/Dropdown";
 import { useTabStore } from "@/store/tabStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { useEditorStore } from "@/store/editorStore";
 import { ENCODING_LIST, LANGUAGE_LIST } from "@/utils/encoding";
 import { MIN_FONT_SIZE, MAX_FONT_SIZE } from "@/hooks/useKeyboard";
 import { useTauri } from "@/hooks/useTauri";
@@ -20,7 +21,9 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
   const updateContent = useTabStore((s) => s.updateContent);
   const markClean = useTabStore((s) => s.markClean);
   const { fontSize, updateSetting } = useSettingsStore();
-  const { readFile } = useTauri();
+  const markdownPreviewVisible = useEditorStore((s) => s.markdownPreviewVisible);
+  const toggleMarkdownPreview = useEditorStore((s) => s.toggleMarkdownPreview);
+  const { readFile, transcodeText } = useTauri();
 
   if (!tab) return null;
 
@@ -28,11 +31,15 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
     window.dispatchEvent(new CustomEvent("novaedit:save"));
   };
 
-  // 切换编码时重新用新编码读取文件
+  // 切换编码时：
+  // - 有文件路径：用新编码重新读取文件
+  // - 无文件路径（工具箱输出、未保存的新标签）：把现有文本按旧编码回写字节，再用新编码解码
   const handleEncodingChange = async (newEncoding: string) => {
+    const oldEncoding = tab.encoding || "UTF-8";
+    if (oldEncoding === newEncoding) return;
+
     setTabEncoding(tabId, newEncoding);
 
-    // 如果标签有文件路径，用新编码重新读取
     if (tab.filePath) {
       try {
         const result = await readFile(tab.filePath, newEncoding);
@@ -41,6 +48,16 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
       } catch (err) {
         console.error("用新编码读取文件失败:", err);
       }
+      return;
+    }
+
+    // 无文件路径：转码当前文本
+    if (!tab.content) return;
+    try {
+      const transcoded = await transcodeText(tab.content, oldEncoding, newEncoding);
+      updateContent(tabId, transcoded);
+    } catch (err) {
+      console.error("转码失败:", err);
     }
   };
 
@@ -132,6 +149,25 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
       </button>
 
       <div style={{ flex: 1 }} />
+
+      {tab.language === "markdown" && (
+        <button
+          onClick={toggleMarkdownPreview}
+          title={markdownPreviewVisible ? "返回编辑模式" : "切换到预览模式"}
+          style={{
+            display: "flex", alignItems: "center", gap: 4, padding: "4px 8px",
+            borderRadius: 6, fontSize: 12,
+            color: markdownPreviewVisible ? "var(--accent)" : "var(--text-secondary)",
+            background: markdownPreviewVisible ? "var(--bg-hover)" : "transparent",
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = markdownPreviewVisible ? "var(--bg-hover)" : "transparent")}
+        >
+          {markdownPreviewVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+          <span style={{ fontSize: 11 }}>{markdownPreviewVisible ? "编辑" : "预览"}</span>
+        </button>
+      )}
 
       {tab.dirty && (
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--warning)", flexShrink: 0 }} title="未保存" />

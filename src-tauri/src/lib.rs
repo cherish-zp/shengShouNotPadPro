@@ -20,6 +20,7 @@ pub fn run() {
             commands::file_ops::rename_file,
             commands::encoding::detect_encoding,
             commands::encoding::list_encodings,
+            commands::encoding::transcode_text,
             commands::search::search_in_file,
             commands::search::search_in_directory,
             commands::search::replace_in_file,
