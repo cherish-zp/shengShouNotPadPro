@@ -1,5 +1,7 @@
 import type { Command } from "@/types";
 
+export type { Command };
+
 export function createCommands(actions: {
   newTab: () => void;
   save: () => void;

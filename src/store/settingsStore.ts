@@ -30,12 +30,16 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     if (key === "theme") {
       applyTheme(value as string);
     }
+    if (key === "accentColor") {
+      applyAccentColor(value as string);
+    }
     get().saveSettings();
   },
 
   resetDefaults: () => {
     set(DEFAULTS);
     applyTheme(DEFAULTS.theme);
+    applyAccentColor(DEFAULTS.accentColor);
     get().saveSettings();
   },
 
@@ -46,6 +50,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         const parsed = JSON.parse(saved);
         set({ ...DEFAULTS, ...parsed });
         applyTheme(parsed.theme || DEFAULTS.theme);
+        applyAccentColor(parsed.accentColor || DEFAULTS.accentColor);
+      } else {
+        applyAccentColor(DEFAULTS.accentColor);
       }
     } catch {
       // ignore
@@ -88,4 +95,50 @@ function applyTheme(theme: string) {
     }
   }
   // "light" 不需要加任何类，:root 就是冷白
+}
+
+// 把强调色写到 CSS 变量上，让全局 var(--accent) / var(--accent-hover) / var(--selection) 跟随
+function applyAccentColor(color: string) {
+  if (!color) return;
+  const hex = normalizeHexColor(color);
+  const hover = darkenHex(hex, 0.12);
+  const { r, g, b } = hexToRgbValues(hex);
+  const root = document.documentElement;
+  root.style.setProperty("--accent", hex);
+  root.style.setProperty("--accent-hover", hover);
+  root.style.setProperty("--selection", `rgba(${r}, ${g}, ${b}, 0.16)`);
+
+  // 亮白强调色：浅色背景下纯白会消失，给它加发光晕，让"自发光"感保留
+  const isPureWhite = hex === "#ffffff";
+  if (isPureWhite) {
+    root.style.setProperty("--accent-glow", "0 0 8px rgba(255,255,255,0.95), 0 0 16px rgba(255,255,255,0.7)");
+    // 浅色模式下被白色淹没，加深底色对比
+    root.style.setProperty("--selection", "rgba(148, 163, 184, 0.35)");
+  } else {
+    root.style.setProperty("--accent-glow", "none");
+  }
+}
+
+function normalizeHexColor(input: string): string {
+  let s = input.trim().toLowerCase();
+  if (s.startsWith("#")) s = s.slice(1);
+  if (/^[0-9a-f]{3}$/.test(s)) s = s.split("").map((c) => c + c).join("");
+  if (!/^[0-9a-f]{6}$/.test(s)) return "#2563eb";
+  return "#" + s;
+}
+
+function hexToRgbValues(hex: string): { r: number; g: number; b: number } {
+  const h = hex.slice(1);
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+
+function darkenHex(hex: string, amount: number): string {
+  const { r, g, b } = hexToRgbValues(hex);
+  const dim = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount))));
+  const toHex = (v: number) => v.toString(16).padStart(2, "0");
+  return "#" + toHex(dim(r)) + toHex(dim(g)) + toHex(dim(b));
 }

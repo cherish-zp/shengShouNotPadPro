@@ -20,6 +20,7 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
   const setTabIndent = useTabStore((s) => s.setTabIndent);
   const updateContent = useTabStore((s) => s.updateContent);
   const markClean = useTabStore((s) => s.markClean);
+  const addTab = useTabStore((s) => s.addTab);
   const { fontSize, updateSetting } = useSettingsStore();
   const markdownPreviewVisible = useEditorStore((s) => s.markdownPreviewVisible);
   const toggleMarkdownPreview = useEditorStore((s) => s.toggleMarkdownPreview);
@@ -75,6 +76,26 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
         fontSize: 12, flexShrink: 0,
       }}
     >
+      {/* 新建便签 */}
+      <button
+        onClick={() => addTab()}
+        title="新建便签 (⌘N)"
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: 24, height: 24, borderRadius: 6,
+          color: "var(--accent)",
+          background: "transparent",
+          cursor: "pointer",
+          flexShrink: 0,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+      >
+        <Plus size={15} />
+      </button>
+
+      <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
+
       <Dropdown
         value={tab.encoding}
         options={ENCODING_LIST.map((e) => ({ value: e.name, label: e.label }))}

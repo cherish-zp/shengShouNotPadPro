@@ -153,6 +153,7 @@ function makeTheme() {
 export default function CodeEditor({ tabId }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const isComposingRef = useRef(false);
   const tab = useTabStore((s) => s.tabs.find((t) => t.id === tabId));
   const updateContent = useTabStore((s) => s.updateContent);
   const { fontSize, fontFamily, lineHeight, wordWrap, showLineNumbers } = useSettingsStore();
@@ -195,7 +196,8 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
         indentWithTab,
       ]),
       EditorView.updateListener.of((update) => {
-        if (update.docChanged) {
+        if (update.docChanged && !isComposingRef.current) {
+          // IME 组合期间不向上同步内容，避免外部回写打断输入会话
           updateContent(tabId, update.state.doc.toString());
         }
         const pos = update.state.selection.main.head;
@@ -204,6 +206,19 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
           line: line.number,
           column: pos - line.from + 1,
         });
+      }),
+      // 监听 IME 组合事件
+      EditorView.domEventHandlers({
+        compositionstart: () => {
+          isComposingRef.current = true;
+        },
+        compositionend: () => {
+          isComposingRef.current = false;
+          // 组合结束后同步一次完整内容
+          if (viewRef.current) {
+            updateContent(tabId, viewRef.current.state.doc.toString());
+          }
+        },
       }),
       themeCompartment.of(makeTheme()),
       languageCompartment.of(getLanguageExtension(tab.language) || []),
@@ -242,6 +257,8 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
   // 切换标签时更新内容
   useEffect(() => {
     if (!viewRef.current || !tab) return;
+    // IME 组合期间不外部回写，避免破坏正在进行的拼写会话
+    if (isComposingRef.current) return;
     const currentContent = viewRef.current.state.doc.toString();
     if (currentContent !== tab.content) {
       viewRef.current.dispatch({

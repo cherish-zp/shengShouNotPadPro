@@ -219,6 +219,7 @@ button {
 .cm-editor .cm-cursor {
   border-left-color: var(--accent);
   border-left-width: 2px;
+  box-shadow: var(--accent-glow);
 }
 
 .cm-editor .cm-matchingBracket {

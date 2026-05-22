@@ -9,6 +9,44 @@ const TOOLS = [
   { id: "regex", label: "正则" },
 ];
 
+// 把任何输入（#fff / fff / #ffffff / ffffff）规范化为 #rrggbb 小写
+function normalizeHex(input: string): string {
+  let s = (input || "").trim().toLowerCase();
+  if (s.startsWith("#")) s = s.slice(1);
+  if (/^[0-9a-f]{3}$/.test(s)) {
+    s = s.split("").map((c) => c + c).join("");
+  }
+  if (!/^[0-9a-f]{6}$/.test(s)) return "#000000";
+  return "#" + s;
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = normalizeHex(hex).slice(1);
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+
+function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case rn: h = (gn - bn) / d + (gn < bn ? 6 : 0); break;
+      case gn: h = (bn - rn) / d + 2; break;
+      case bn: h = (rn - gn) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
 export default function ToolsPanel() {
   const [activeTool, setActiveTool] = useState("json");
   const [jsonInput, setJsonInput] = useState("");
@@ -73,11 +111,11 @@ export default function ToolsPanel() {
   };
 
   const handleColorInfo = () => {
-    const r = parseInt(colorHex.slice(1, 3), 16);
-    const g = parseInt(colorHex.slice(3, 5), 16);
-    const b = parseInt(colorHex.slice(5, 7), 16);
+    const hex = normalizeHex(colorHex);
+    const { r, g, b } = hexToRgb(hex);
+    const { h, s, l } = rgbToHsl(r, g, b);
     outputToEditor(
-      `HEX:  ${colorHex}\nRGB:  rgb(${r}, ${g}, ${b})\nRGBA: rgba(${r}, ${g}, ${b}, 1)`,
+      `HEX:  ${hex}\nRGB:  rgb(${r}, ${g}, ${b})\nRGBA: rgba(${r}, ${g}, ${b}, 1)\nHSL:  hsl(${h}, ${s}%, ${l}%)`,
       "颜色信息.txt"
     );
   };
@@ -201,22 +239,109 @@ export default function ToolsPanel() {
           </div>
         )}
 
-        {activeTool === "color" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 12 }}>
-            <input type="color" value={colorHex} onChange={(e) => setColorHex(e.target.value)} style={{ width: 60, height: 36, border: "none", cursor: "pointer" }} />
-            <div style={{ width: "100%", height: 60, borderRadius: 8, background: colorHex, border: "1px solid var(--border)" }} />
-            <div>HEX: <span style={{ fontFamily: "monospace", color: "var(--accent)" }}>{colorHex}</span></div>
-            <div>RGB: <span style={{ fontFamily: "monospace", color: "var(--accent)" }}>
-              {parseInt(colorHex.slice(1, 3), 16)}, {parseInt(colorHex.slice(3, 5), 16)}, {parseInt(colorHex.slice(5, 7), 16)}
-            </span></div>
+        {activeTool === "color" && (() => {
+          const hex = normalizeHex(colorHex);
+          const { r, g, b } = hexToRgb(hex);
+          const { h, s, l } = rgbToHsl(r, g, b);
+          const copy = (text: string) => {
+            navigator.clipboard?.writeText(text).catch(() => {});
+          };
+          const rowStyle: React.CSSProperties = {
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "6px 10px", borderRadius: 6,
+            background: "var(--bg-secondary)", border: "1px solid var(--border)",
+            fontSize: 12,
+          };
+          const codeStyle: React.CSSProperties = {
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+            color: "var(--text-primary)",
+          };
+          const copyBtn = (text: string) => (
             <button
-              onClick={handleColorInfo}
-              style={{ padding: "6px 14px", borderRadius: 6, fontSize: 12, background: "var(--accent)", color: "#fff", cursor: "pointer", alignSelf: "flex-start", fontWeight: 500 }}
+              onClick={() => copy(text)}
+              title="复制"
+              style={{
+                padding: "2px 8px", borderRadius: 4, fontSize: 11,
+                background: "var(--bg-primary)", color: "var(--text-secondary)",
+                border: "1px solid var(--border)", cursor: "pointer",
+              }}
             >
-              导出颜色信息
+              复制
             </button>
-          </div>
-        )}
+          );
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 12 }}>
+              {/* 颜色预览块 + 选色器 */}
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%", height: 90, borderRadius: 8,
+                  background: hex, border: "1px solid var(--border)",
+                  overflow: "hidden",
+                }}
+              >
+                <input
+                  type="color"
+                  value={hex}
+                  onChange={(e) => setColorHex(e.target.value)}
+                  title="点击任意位置选取颜色"
+                  style={{
+                    position: "absolute", inset: 0,
+                    width: "100%", height: "100%",
+                    opacity: 0, cursor: "pointer", border: "none", padding: 0,
+                  }}
+                />
+              </div>
+
+              {/* HEX 手动输入 */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ color: "var(--text-secondary)", width: 36 }}>HEX</span>
+                <input
+                  value={colorHex}
+                  onChange={(e) => setColorHex(e.target.value)}
+                  onBlur={() => setColorHex(normalizeHex(colorHex))}
+                  placeholder="#2563EB"
+                  style={{
+                    flex: 1, padding: "4px 8px",
+                    background: "var(--bg-primary)", border: "1px solid var(--border)",
+                    borderRadius: 6, color: "var(--text-primary)",
+                    fontFamily: "ui-monospace, monospace", fontSize: 12,
+                  }}
+                />
+                {copyBtn(hex)}
+              </div>
+
+              {/* RGB */}
+              <div style={rowStyle}>
+                <span style={codeStyle}>rgb({r}, {g}, {b})</span>
+                {copyBtn(`rgb(${r}, ${g}, ${b})`)}
+              </div>
+
+              {/* HSL */}
+              <div style={rowStyle}>
+                <span style={codeStyle}>hsl({h}, {s}%, {l}%)</span>
+                {copyBtn(`hsl(${h}, ${s}%, ${l}%)`)}
+              </div>
+
+              {/* RGBA */}
+              <div style={rowStyle}>
+                <span style={codeStyle}>rgba({r}, {g}, {b}, 1)</span>
+                {copyBtn(`rgba(${r}, ${g}, ${b}, 1)`)}
+              </div>
+
+              <button
+                onClick={handleColorInfo}
+                style={{
+                  padding: "6px 14px", borderRadius: 6, fontSize: 12,
+                  background: "var(--accent)", color: "#fff",
+                  cursor: "pointer", alignSelf: "flex-start", fontWeight: 500,
+                }}
+              >
+                导出到新标签
+              </button>
+            </div>
+          );
+        })()}
 
         {activeTool === "regex" && (
           <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>

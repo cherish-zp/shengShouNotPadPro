@@ -120,17 +120,37 @@ export default function SettingsPanel() {
                 </div>
               </SettingRow>
               <SettingRow label="强调色">
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {ACCENT_PRESETS.map((preset) => (
-                    <button key={preset.color} onClick={() => settings.updateSetting("accentColor", preset.color)}
-                      title={preset.name}
-                      style={{
-                        width: 28, height: 28, borderRadius: "50%",
-                        background: preset.color, cursor: "pointer",
-                        border: settings.accentColor === preset.color ? "2px solid var(--text-primary)" : "2px solid transparent",
-                        transition: "all 0.15s",
-                      }} />
-                  ))}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", maxWidth: 280 }}>
+                  {ACCENT_PRESETS.map((preset) => {
+                    const isSelected = settings.accentColor.toLowerCase() === preset.color.toLowerCase();
+                    const isLight = preset.color.toLowerCase() === "#ffffff";
+                    // 亮白用径向高光 + 外辉光，做出"自发光"质感
+                    const background = isLight
+                      ? "radial-gradient(circle at 35% 30%, #ffffff 0%, #f8fafc 45%, #e2e8f0 100%)"
+                      : preset.color;
+                    const baseBoxShadow = isLight
+                      ? "0 0 8px 2px rgba(255,255,255,0.95), inset 0 0 6px rgba(255,255,255,0.9), 0 0 0 1px rgba(0,0,0,0.06)"
+                      : "none";
+                    const selectedBoxShadow = isLight
+                      ? `0 0 0 2px var(--bg-primary), 0 0 0 4px ${preset.color}, 0 0 12px 4px rgba(255,255,255,0.95), inset 0 0 6px rgba(255,255,255,0.95)`
+                      : `0 0 0 2px var(--bg-primary), 0 0 0 4px ${preset.color}`;
+                    return (
+                      <button
+                        key={preset.color}
+                        onClick={() => settings.updateSetting("accentColor", preset.color)}
+                        title={preset.name}
+                        style={{
+                          width: 28, height: 28, borderRadius: "50%",
+                          background, cursor: "pointer",
+                          border: isSelected
+                            ? "2px solid var(--text-primary)"
+                            : "2px solid transparent",
+                          boxShadow: isSelected ? selectedBoxShadow : baseBoxShadow,
+                          transition: "all 0.15s",
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               </SettingRow>
             </>
