@@ -16,6 +16,8 @@ pub fn run() {
             commands::file_ops::write_file,
             commands::file_ops::get_file_info,
             commands::file_ops::list_directory,
+            commands::file_ops::read_file_bytes,
+            commands::file_ops::list_directory_recursive,
             commands::file_ops::delete_file,
             commands::file_ops::rename_file,
             commands::encoding::detect_encoding,
@@ -38,5 +40,5 @@ pub fn run() {
             commands::file_ops::list_recent_files,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running NovaEdit");
+        .expect("error while running NotePadPro");
 }

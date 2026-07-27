@@ -153,6 +153,19 @@ export default function SettingsPanel() {
                   })}
                 </div>
               </SettingRow>
+              <SettingRow label="窗口透明度">
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input
+                    type="range" min={0.3} max={1} step={0.05}
+                    value={settings.windowOpacity}
+                    onChange={(e) => settings.updateSetting("windowOpacity", parseFloat(e.target.value))}
+                    style={{ width: 200 }}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--text-secondary)", minWidth: 36 }}>
+                    {Math.round(settings.windowOpacity * 100)}%
+                  </span>
+                </div>
+              </SettingRow>
             </>
           )}
 
@@ -162,7 +175,7 @@ export default function SettingsPanel() {
                 ["新建便签", "⌘N"], ["保存", "⌘S"], ["关闭便签", "⌘W"],
                 ["查找", "⌘F"], ["替换", "⌘H"], ["全局搜索", "⌘⇧F"],
                 ["快速打开", "⌘P"], ["命令面板", "⌘⇧P"], ["跳转到行", "⌘G"],
-                ["切换侧边栏", "⌘B"], ["切换终端", "⌘J"],
+                ["切换侧边栏", "⌘B"],
                 ["放大", "⌘+"], ["缩小", "⌘-"], ["重置缩放", "⌘0"],
               ].map(([label, keys]) => (
                 <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--border)" }}>

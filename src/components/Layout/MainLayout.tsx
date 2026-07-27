@@ -1,24 +1,25 @@
 import React, { useState } from "react";
 import { useEditorStore } from "@/store/editorStore";
+import { useTabStore } from "@/store/tabStore";
 import Sidebar from "./Sidebar";
 import StatusBar from "./StatusBar";
 import EditorContainer from "@/components/Editor/EditorContainer";
+import EditorToolbar from "@/components/Editor/EditorToolbar";
 import FindReplace from "@/components/Search/FindReplace";
 import DiffView from "@/components/Diff/DiffView";
 import CommandPalette from "@/components/CommandPalette/CommandPalette";
 import QuickOpen from "@/components/Search/QuickOpen";
 import GoToLine from "@/components/Search/GoToLine";
 import SettingsPanel from "@/components/Settings/SettingsPanel";
-import TerminalPanel from "@/components/Terminal/TerminalPanel";
 
 export default function MainLayout() {
   const sidebarVisible = useEditorStore((s) => s.sidebarVisible);
-  const terminalVisible = useEditorStore((s) => s.terminalVisible);
   const settingsOpen = useEditorStore((s) => s.settingsOpen);
   const commandPaletteOpen = useEditorStore((s) => s.commandPaletteOpen);
   const quickOpenOpen = useEditorStore((s) => s.quickOpenOpen);
   const goToLineOpen = useEditorStore((s) => s.goToLineOpen);
   const diffViewOpen = useEditorStore((s) => s.diffViewOpen);
+  const activeTabId = useTabStore((s) => s.activeTabId);
   const [sidebarWidth, setSidebarWidth] = useState(300);
   const [isResizing, setIsResizing] = useState(false);
 
@@ -53,6 +54,7 @@ export default function MainLayout() {
               width: sidebarWidth, flexShrink: 0,
               borderRight: "1px solid var(--border)",
               display: "flex", overflow: "hidden",
+              animation: "slideInLeft 200ms ease",
             }}
           >
             <Sidebar />
@@ -64,11 +66,12 @@ export default function MainLayout() {
           <div
             onMouseDown={handleMouseDown}
             style={{
-              width: 4, cursor: "col-resize", flexShrink: 0,
+              width: 5, cursor: "col-resize", flexShrink: 0,
               background: isResizing ? "var(--accent)" : "transparent",
-              transition: isResizing ? "none" : "background 0.2s",
+              transition: isResizing ? "none" : "background 0.25s ease",
+              borderRadius: 3,
             }}
-            onMouseEnter={(e) => { if (!isResizing) e.currentTarget.style.background = "var(--border)"; }}
+            onMouseEnter={(e) => { if (!isResizing) e.currentTarget.style.background = "var(--bg-hover)"; }}
             onMouseLeave={(e) => { if (!isResizing) e.currentTarget.style.background = "transparent"; }}
           />
         )}
@@ -78,11 +81,11 @@ export default function MainLayout() {
           {/* Search bar overlay */}
           <FindReplace />
 
-          {/* Editor */}
-          {diffViewOpen ? <DiffView /> : <EditorContainer />}
+          {/* 顶部工具栏 */}
+          <EditorToolbar tabId={activeTabId ?? undefined} />
 
-          {/* Terminal */}
-          {terminalVisible && <TerminalPanel />}
+          {/* 主体：编辑器 / Diff */}
+          {diffViewOpen ? <DiffView /> : <EditorContainer />}
         </div>
       </div>
 

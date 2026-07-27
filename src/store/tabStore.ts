@@ -99,9 +99,12 @@ export const useTabStore = create<TabStore>((set, get) => {
       const state = get();
       const id = crypto.randomUUID();
       const num = state.nextTabNum;
+      const kind = tabData?.kind ?? "file";
+      const defaultName = `新建${num}`;
       const newTab: Tab = {
         id,
-        name: tabData?.name ?? `新建${num}`,
+        name: tabData?.name ?? defaultName,
+        kind,
         filePath: tabData?.filePath,
         content: tabData?.content ?? "",
         language: tabData?.language ?? "plaintext",

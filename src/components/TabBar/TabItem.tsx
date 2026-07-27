@@ -58,7 +58,7 @@ export default function TabItem({ tab, isActive, onSelect, onClose, onRename, on
         minWidth: 0, // critical for flex text truncation
         paddingLeft: 8,
       }}>
-        {/* Color dot */}
+        {/* Icon: file */}
         <span style={{
           width: 8,
           height: 8,
@@ -94,21 +94,37 @@ export default function TabItem({ tab, isActive, onSelect, onClose, onRename, on
             onClick={(e) => e.stopPropagation()}
           />
         ) : (
-          <span
-            style={{
-              flex: 1,
-              fontSize: 13,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-              lineHeight: 1.4,
-              minWidth: 0,
-            }}
-            title={tab.name} // show full name on hover
-          >
-            {tab.name}
-          </span>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+            <span
+              style={{
+                fontSize: 13,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
+                lineHeight: 1.4,
+              }}
+              title={tab.name}
+            >
+              {tab.name}
+            </span>
+            {tab.filePath && (
+              <span
+                style={{
+                  fontSize: 10,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  color: "var(--text-secondary)",
+                  opacity: 0.6,
+                  lineHeight: 1.2,
+                }}
+                title={tab.filePath}
+              >
+                {tab.filePath}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
@@ -121,8 +137,8 @@ export default function TabItem({ tab, isActive, onSelect, onClose, onRename, on
         paddingLeft: 4,
         paddingRight: 2,
       }}>
-        {/* Dirty indicator - always show if dirty */}
-        {tab.dirty && !editing && !hovered && (
+        {/* Dirty indicator */}
+        {tab.dirty && !editing && (
           <span style={{
             width: 6,
             height: 6,
@@ -132,8 +148,8 @@ export default function TabItem({ tab, isActive, onSelect, onClose, onRename, on
           }} />
         )}
 
-        {/* Close button - show on hover or active */}
-        {(hovered || isActive) && !editing && (
+        {/* Close button - always visible for file tabs with filePath */}
+        {(hovered || isActive || tab.filePath) && !editing && (
           <button
             onClick={(e) => { e.stopPropagation(); onClose(); }}
             style={{
@@ -143,10 +159,11 @@ export default function TabItem({ tab, isActive, onSelect, onClose, onRename, on
               width: 20,
               height: 20,
               borderRadius: 4,
-              color: "var(--text-secondary)",
+              color: hovered ? "var(--text-primary)" : "var(--text-secondary)",
               cursor: "pointer",
               flexShrink: 0,
               background: "transparent",
+              opacity: hovered || isActive ? 1 : 0.5,
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = "var(--bg-hover)";

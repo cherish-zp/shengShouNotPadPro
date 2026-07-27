@@ -14,7 +14,6 @@ export function createCommands(actions: {
   commandPalette: () => void;
   goToLine: () => void;
   toggleSidebar: () => void;
-  toggleTerminal: () => void;
   toggleWordWrap: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
@@ -42,7 +41,6 @@ export function createCommands(actions: {
     { id: "commandPalette", label: "命令面板", shortcut: "⌘⇧P", action: actions.commandPalette, category: "视图", icon: "terminal" },
     { id: "goToLine", label: "跳转到行", shortcut: "⌘G", action: actions.goToLine, category: "视图", icon: "arrow-down" },
     { id: "toggleSidebar", label: "切换侧边栏", shortcut: "⌘B", action: actions.toggleSidebar, category: "视图", icon: "panel-left" },
-    { id: "toggleTerminal", label: "切换终端", shortcut: "⌘J", action: actions.toggleTerminal, category: "视图", icon: "terminal" },
     { id: "toggleWordWrap", label: "切换自动换行", shortcut: "", action: actions.toggleWordWrap, category: "视图", icon: "wrap-text" },
     { id: "zenMode", label: "禅模式", shortcut: "", action: actions.zenMode, category: "视图", icon: "maximize" },
     { id: "zoomIn", label: "放大", shortcut: "⌘+", action: actions.zoomIn, category: "视图", icon: "zoom-in" },

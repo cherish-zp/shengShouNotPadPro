@@ -95,13 +95,6 @@ export function useKeyboard() {
         return;
       }
 
-      // Cmd+J - Toggle terminal
-      if (isMeta && e.key === "j") {
-        e.preventDefault();
-        editorStore.toggleTerminal();
-        return;
-      }
-
       // Cmd+= - Zoom in
       if (isMeta && (e.key === "=" || e.key === "+")) {
         e.preventDefault();

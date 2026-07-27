@@ -1,6 +1,7 @@
 export interface Tab {
   id: string;
   name: string;
+  kind?: "file";
   filePath?: string;
   content: string;
   language: string;
@@ -114,6 +115,7 @@ export interface AppSettings {
   showLineNumbers: boolean;
   accentColor: string;
   sidebarWidth: number;
+  windowOpacity: number;
 }
 
 export interface FileInfo {

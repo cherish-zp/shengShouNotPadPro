@@ -18,7 +18,6 @@ export const DEFAULT_KEYBINDINGS: KeyBinding[] = [
   { command: "commandPalette", keys: "Meta+Shift+p", label: "命令面板" },
   { command: "goToLine", keys: "Meta+g", label: "跳转到行" },
   { command: "toggleSidebar", keys: "Meta+b", label: "切换侧边栏" },
-  { command: "toggleTerminal", keys: "Meta+j", label: "切换终端" },
   { command: "zoomIn", keys: "Meta+=", label: "放大" },
   { command: "zoomOut", keys: "Meta+-", label: "缩小" },
   { command: "resetZoom", keys: "Meta+0", label: "重置缩放" },

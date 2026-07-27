@@ -1,4 +1,5 @@
 use crate::state::{AppState, RecentFile};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -251,4 +252,58 @@ pub fn add_recent_file(
     state: tauri::State<'_, AppState>,
 ) -> Result<(), String> {
     state.add_recent_file(&path, &name)
+}
+
+/// 读取文件原始字节，返回 base64 编码字符串（用于解析 Xshell 等二进制/特殊编码文件）
+#[tauri::command]
+pub fn read_file_bytes(path: String) -> Result<String, String> {
+    let bytes = fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))?;
+    Ok(BASE64.encode(&bytes))
+}
+
+/// 递归列出目录下所有文件（用于导入 Xshell 会话等场景）
+#[tauri::command]
+pub fn list_directory_recursive(path: String) -> Result<Vec<DirEntry>, String> {
+    let mut result: Vec<DirEntry> = Vec::new();
+    fn walk(dir: &Path, result: &mut Vec<DirEntry>) -> Result<(), String> {
+        let entries =
+            fs::read_dir(dir).map_err(|e| format!("Failed to read directory: {}", e))?;
+        for entry in entries {
+            let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+            let metadata = entry
+                .metadata()
+                .map_err(|e| format!("Failed to read metadata: {}", e))?;
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            let file_path = entry.path().to_string_lossy().to_string();
+            let extension = entry
+                .path()
+                .extension()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            let modified = metadata
+                .modified()
+                .map(|t| {
+                    let datetime: chrono::DateTime<Utc> = t.into();
+                    datetime.to_rfc3339()
+                })
+                .unwrap_or_default();
+
+            result.push(DirEntry {
+                name: file_name,
+                path: file_path,
+                is_dir: metadata.is_dir(),
+                size: metadata.len(),
+                modified,
+                extension,
+            });
+
+            if metadata.is_dir() {
+                walk(&entry.path(), result)?;
+            }
+        }
+        Ok(())
+    }
+    walk(Path::new(&path), &mut result)?;
+    Ok(result)
 }

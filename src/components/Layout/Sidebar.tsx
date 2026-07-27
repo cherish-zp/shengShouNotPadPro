@@ -1,15 +1,13 @@
 import React from "react";
-import { FileText, FolderOpen, Search, GitBranch, Wrench, Puzzle, Settings } from "lucide-react";
+import { FileText, Search, Wrench, Puzzle, Settings } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
-import TabList from "@/components/TabBar/TabList";
-import FileTree from "@/components/FileTree/FileTree";
+import FilePanel from "@/components/FileTree/FilePanel";
 import GlobalSearch from "@/components/Search/GlobalSearch";
 import ToolsPanel from "@/components/Tools/ToolsPanel";
 import PluginPanel from "@/components/PluginManager/PluginPanel";
 
 const VIEWS = [
-  { id: "tabs" as const, icon: FileText, label: "便签" },
-  { id: "files" as const, icon: FolderOpen, label: "文件" },
+  { id: "files" as const, icon: FileText, label: "文件" },
   { id: "search" as const, icon: Search, label: "搜索" },
   { id: "tools" as const, icon: Wrench, label: "工具" },
   { id: "plugins" as const, icon: Puzzle, label: "插件" },
@@ -21,13 +19,14 @@ export default function Sidebar() {
   const setSettingsOpen = useEditorStore((s) => s.setSettingsOpen);
 
   const renderContent = () => {
-    switch (activeView) {
-      case "tabs": return <TabList />;
-      case "files": return <FileTree />;
+    // 旧的 "tabs" 视图兼容：自动映射到 "files"
+    const view = activeView === "tabs" ? "files" : activeView;
+    switch (view) {
+      case "files": return <FilePanel />;
       case "search": return <GlobalSearch />;
       case "tools": return <ToolsPanel />;
       case "plugins": return <PluginPanel />;
-      default: return <TabList />;
+      default: return <FilePanel />;
     }
   };
 
@@ -36,8 +35,8 @@ export default function Sidebar() {
       {/* Icon bar */}
       <div
         style={{
-          width: 44, display: "flex", flexDirection: "column", alignItems: "center",
-          padding: "8px 0", gap: 2,
+          width: 48, display: "flex", flexDirection: "column", alignItems: "center",
+          padding: "10px 0", gap: 4,
           borderRight: "1px solid var(--border)", flexShrink: 0,
         }}
       >
@@ -48,16 +47,17 @@ export default function Sidebar() {
             title={label}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
-              width: 34, height: 34, borderRadius: 8,
+              width: 36, height: 36, borderRadius: 10,
               color: activeView === id ? "var(--accent)" : "var(--text-secondary)",
-              background: activeView === id ? "var(--bg-hover)" : "transparent",
+              background: activeView === id ? "var(--selection)" : "transparent",
               cursor: "pointer",
-              transition: "all 0.15s",
+              transition: "all 180ms cubic-bezier(0.4, 0, 0.2, 1)",
+              boxShadow: activeView === id ? "var(--accent-glow)" : "none",
             }}
-            onMouseEnter={(e) => { if (activeView !== id) e.currentTarget.style.background = "var(--bg-hover)"; }}
-            onMouseLeave={(e) => { if (activeView !== id) e.currentTarget.style.background = "transparent"; }}
+            onMouseEnter={(e) => { if (activeView !== id) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; } }}
+            onMouseLeave={(e) => { if (activeView !== id) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; } }}
           >
-            <Icon size={18} />
+            <Icon size={19} />
           </button>
         ))}
         <div style={{ flex: 1 }} />
@@ -66,13 +66,14 @@ export default function Sidebar() {
           title="设置"
           style={{
             display: "flex", alignItems: "center", justifyContent: "center",
-            width: 34, height: 34, borderRadius: 8,
+            width: 36, height: 36, borderRadius: 10,
             color: "var(--text-secondary)", cursor: "pointer",
+            transition: "all 180ms cubic-bezier(0.4, 0, 0.2, 1)",
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-secondary)"; }}
         >
-          <Settings size={18} />
+          <Settings size={19} />
         </button>
       </div>
 

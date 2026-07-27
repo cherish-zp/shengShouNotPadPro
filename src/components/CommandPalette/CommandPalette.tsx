@@ -29,7 +29,6 @@ export default function CommandPalette() {
     commandPalette: () => {},
     goToLine: () => editorStore.setGoToLineOpen(true),
     toggleSidebar: () => editorStore.toggleSidebar(),
-    toggleTerminal: () => editorStore.toggleTerminal(),
     toggleWordWrap: () => settingsStore.updateSetting("wordWrap", !settingsStore.wordWrap),
     zoomIn: () => settingsStore.updateSetting("fontSize", Math.min(settingsStore.fontSize + 1, 32)),
     zoomOut: () => settingsStore.updateSetting("fontSize", Math.max(settingsStore.fontSize - 1, 8)),

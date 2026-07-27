@@ -1,5 +1,5 @@
 import React from "react";
-import { Save, Minus, Plus, Eye, EyeOff } from "lucide-react";
+import { Save, Minus, Plus, Eye, EyeOff, WrapText } from "lucide-react";
 import Dropdown from "@/components/Common/Dropdown";
 import { useTabStore } from "@/store/tabStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -9,11 +9,11 @@ import { MIN_FONT_SIZE, MAX_FONT_SIZE } from "@/hooks/useKeyboard";
 import { useTauri } from "@/hooks/useTauri";
 
 interface EditorToolbarProps {
-  tabId: string;
+  tabId?: string;
 }
 
 export default function EditorToolbar({ tabId }: EditorToolbarProps) {
-  const tab = useTabStore((s) => s.tabs.find((t) => t.id === tabId));
+  const tab = useTabStore((s) => (tabId ? s.tabs.find((t) => t.id === tabId) : undefined));
   const setTabEncoding = useTabStore((s) => s.setTabEncoding);
   const setTabLanguage = useTabStore((s) => s.setTabLanguage);
   const setTabLineEnding = useTabStore((s) => s.setTabLineEnding);
@@ -21,12 +21,10 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
   const updateContent = useTabStore((s) => s.updateContent);
   const markClean = useTabStore((s) => s.markClean);
   const addTab = useTabStore((s) => s.addTab);
-  const { fontSize, updateSetting } = useSettingsStore();
+  const { fontSize, wordWrap, updateSetting } = useSettingsStore();
   const markdownPreviewVisible = useEditorStore((s) => s.markdownPreviewVisible);
   const toggleMarkdownPreview = useEditorStore((s) => s.toggleMarkdownPreview);
   const { readFile, transcodeText } = useTauri();
-
-  if (!tab) return null;
 
   const handleSave = () => {
     window.dispatchEvent(new CustomEvent("novaedit:save"));
@@ -36,6 +34,7 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
   // - 有文件路径：用新编码重新读取文件
   // - 无文件路径（工具箱输出、未保存的新标签）：把现有文本按旧编码回写字节，再用新编码解码
   const handleEncodingChange = async (newEncoding: string) => {
+    if (!tab || !tabId) return;
     const oldEncoding = tab.encoding || "UTF-8";
     if (oldEncoding === newEncoding) return;
 
@@ -71,7 +70,7 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
   return (
     <div
       style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "4px 12px",
+        display: "flex", alignItems: "center", gap: 8, padding: "5px 14px",
         background: "var(--bg-secondary)", borderBottom: "1px solid var(--border)",
         fontSize: 12, flexShrink: 0,
       }}
@@ -96,44 +95,48 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
 
       <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
 
-      <Dropdown
-        value={tab.encoding}
-        options={ENCODING_LIST.map((e) => ({ value: e.name, label: e.label }))}
-        onChange={handleEncodingChange}
-        width={110}
-      />
-      <Dropdown
-        value={tab.language}
-        options={LANGUAGE_LIST.map((l) => ({ value: l.id, label: l.name }))}
-        onChange={(v) => setTabLanguage(tabId, v)}
-        width={120}
-      />
-      <Dropdown
-        value={tab.lineEnding}
-        options={[
-          { value: "LF", label: "LF (Mac)" },
-          { value: "CRLF", label: "CRLF (Win)" },
-        ]}
-        onChange={(v) => setTabLineEnding(tabId, v as "LF" | "CRLF")}
-        width={100}
-      />
-      <Dropdown
-        value={`${tab.indentType === "tab" ? "Tab" : tab.indentSize}`}
-        options={[
-          { value: "Tab", label: "制表符" },
-          { value: "2", label: "2 空格" },
-          { value: "4", label: "4 空格" },
-          { value: "8", label: "8 空格" },
-        ]}
-        onChange={(v) => {
-          if (v === "Tab") setTabIndent(tabId, 4, "tab");
-          else setTabIndent(tabId, parseInt(v), "spaces");
-        }}
-        width={90}
-      />
+      {tab && tabId && (
+        <>
+          <Dropdown
+            value={tab.encoding}
+            options={ENCODING_LIST.map((e) => ({ value: e.name, label: e.label }))}
+            onChange={handleEncodingChange}
+            width={110}
+          />
+          <Dropdown
+            value={tab.language}
+            options={LANGUAGE_LIST.map((l) => ({ value: l.id, label: l.name }))}
+            onChange={(v) => setTabLanguage(tabId, v)}
+            width={120}
+          />
+          <Dropdown
+            value={tab.lineEnding}
+            options={[
+              { value: "LF", label: "LF (Mac)" },
+              { value: "CRLF", label: "CRLF (Win)" },
+            ]}
+            onChange={(v) => setTabLineEnding(tabId, v as "LF" | "CRLF")}
+            width={100}
+          />
+          <Dropdown
+            value={`${tab.indentType === "tab" ? "Tab" : tab.indentSize}`}
+            options={[
+              { value: "Tab", label: "制表符" },
+              { value: "2", label: "2 空格" },
+              { value: "4", label: "4 空格" },
+              { value: "8", label: "8 空格" },
+            ]}
+            onChange={(v) => {
+              if (v === "Tab") setTabIndent(tabId, 4, "tab");
+              else setTabIndent(tabId, parseInt(v), "spaces");
+            }}
+            width={90}
+          />
 
-      {/* 分隔线 */}
-      <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
+          {/* 分隔线 */}
+          <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
+        </>
+      )}
 
       {/* 字体大小控制 */}
       <button
@@ -169,9 +172,29 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
         <Plus size={13} />
       </button>
 
+      {/* 分隔线 */}
+      <div style={{ width: 1, height: 16, background: "var(--border)", flexShrink: 0 }} />
+
+      {/* 自动换行切换 */}
+      <button
+        onClick={() => updateSetting("wordWrap", !wordWrap)}
+        title={wordWrap ? "已开启自动换行（点击关闭）" : "已关闭自动换行（点击开启）"}
+        style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: 26, height: 22, borderRadius: 4,
+          color: wordWrap ? "var(--accent)" : "var(--text-secondary)",
+          background: wordWrap ? "var(--bg-hover)" : "transparent",
+          cursor: "pointer", flexShrink: 0,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+        onMouseLeave={(e) => (e.currentTarget.style.background = wordWrap ? "var(--bg-hover)" : "transparent")}
+      >
+        <WrapText size={14} />
+      </button>
+
       <div style={{ flex: 1 }} />
 
-      {tab.language === "markdown" && (
+      {tab && tab.language === "markdown" && (
         <button
           onClick={toggleMarkdownPreview}
           title={markdownPreviewVisible ? "返回编辑模式" : "切换到预览模式"}
@@ -190,22 +213,24 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
         </button>
       )}
 
-      {tab.dirty && (
+      {tab?.dirty && (
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--warning)", flexShrink: 0 }} title="未保存" />
       )}
-      <button
-        onClick={handleSave}
-        title="保存 (⌘S)"
-        style={{
-          display: "flex", alignItems: "center", gap: 4, padding: "4px 8px",
-          borderRadius: 6, fontSize: 12, color: "var(--text-secondary)",
-          cursor: "pointer",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
-      >
-        <Save size={14} />
-      </button>
+      {tab && (
+        <button
+          onClick={handleSave}
+          title="保存 (⌘S)"
+          style={{
+            display: "flex", alignItems: "center", gap: 4, padding: "4px 8px",
+            borderRadius: 6, fontSize: 12, color: "var(--text-secondary)",
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+        >
+          <Save size={14} />
+        </button>
+      )}
     </div>
   );
 }

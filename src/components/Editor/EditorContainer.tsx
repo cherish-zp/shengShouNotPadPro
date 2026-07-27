@@ -3,7 +3,6 @@ import { FileText, Plus, Upload } from "lucide-react";
 import { useTabStore } from "@/store/tabStore";
 import { useEditorStore } from "@/store/editorStore";
 import { useFileDrop } from "@/hooks/useFileDrop";
-import EditorToolbar from "./EditorToolbar";
 import CodeEditor from "./CodeEditor";
 import MarkdownPreview from "./MarkdownPreview";
 
@@ -49,7 +48,7 @@ export default function EditorContainer() {
       >
         <FileText size={64} style={{ opacity: 0.2 }} />
         <div style={{ textAlign: "center" }}>
-          <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)", opacity: 0.7 }}>NovaEdit</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)", opacity: 0.7 }}>NotePadPro</h2>
           <p style={{ fontSize: 13, marginBottom: 24, opacity: 0.5 }}>轻量 · 极速 · 便签编辑器</p>
         </div>
         <button
@@ -82,7 +81,6 @@ export default function EditorContainer() {
 
   return (
     <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <EditorToolbar tabId={activeTabId} />
       {showPreview && activeTab ? (
         <MarkdownPreview content={activeTab.content} />
       ) : (

@@ -20,6 +20,7 @@ const DEFAULTS: AppSettings = {
   showLineNumbers: true,
   accentColor: "#2563EB",
   sidebarWidth: 240,
+  windowOpacity: 1,
 };
 
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
@@ -33,6 +34,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     if (key === "accentColor") {
       applyAccentColor(value as string);
     }
+    if (key === "windowOpacity") {
+      applyWindowOpacity(value as number);
+    }
     get().saveSettings();
   },
 
@@ -40,17 +44,24 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     set(DEFAULTS);
     applyTheme(DEFAULTS.theme);
     applyAccentColor(DEFAULTS.accentColor);
+    applyWindowOpacity(DEFAULTS.windowOpacity);
     get().saveSettings();
   },
 
   loadSettings: () => {
     try {
+      // 确保 Tauri 原生窗口底层透明（只需一次），CSS opacity 才能透出桌面
+      import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+        getCurrentWindow().setBackgroundColor("transparent");
+      }).catch(() => {});
+
       const saved = localStorage.getItem("novaedit-settings");
       if (saved) {
         const parsed = JSON.parse(saved);
         set({ ...DEFAULTS, ...parsed });
         applyTheme(parsed.theme || DEFAULTS.theme);
         applyAccentColor(parsed.accentColor || DEFAULTS.accentColor);
+        applyWindowOpacity(parsed.windowOpacity ?? DEFAULTS.windowOpacity);
       } else {
         applyAccentColor(DEFAULTS.accentColor);
       }
@@ -74,6 +85,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         showLineNumbers: state.showLineNumbers,
         accentColor: state.accentColor,
         sidebarWidth: state.sidebarWidth,
+        windowOpacity: state.windowOpacity,
       };
       localStorage.setItem("novaedit-settings", JSON.stringify(settings));
     } catch {
@@ -141,4 +153,8 @@ function darkenHex(hex: string, amount: number): string {
   const dim = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount))));
   const toHex = (v: number) => v.toString(16).padStart(2, "0");
   return "#" + toHex(dim(r)) + toHex(dim(g)) + toHex(dim(b));
+}
+
+function applyWindowOpacity(opacity: number) {
+  document.body.style.opacity = String(opacity);
 }

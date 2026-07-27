@@ -12,24 +12,27 @@ export default function StatusBar() {
     <div
       style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        height: 24, padding: "0 12px", fontSize: 11,
+        height: 26, padding: "0 14px", fontSize: 11,
         background: "var(--bg-secondary)", borderTop: "1px solid var(--border)",
         color: "var(--text-secondary)", flexShrink: 0,
+        letterSpacing: "0.02em",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         {cursorPos && (
-          <span>行 {cursorPos.line}, 列 {cursorPos.column}</span>
+          <span style={{ opacity: 0.8 }}>行 {cursorPos.line}, 列 {cursorPos.column}</span>
         )}
-        {tab && <span style={{ opacity: 0.6 }}>|</span>}
-        {tab && <span>{tab.content.split("\n").length} 行</span>}
-        {tab && <span style={{ opacity: 0.6 }}>|</span>}
-        {tab && <span>{tab.content.length} 字符</span>}
+        {tab && <span style={{ opacity: 0.25 }}>|</span>}
+        {tab && <span style={{ opacity: 0.8 }}>{tab.content.split("\n").length} 行</span>}
+        {tab && <span style={{ opacity: 0.25 }}>|</span>}
+        {tab && <span style={{ opacity: 0.8 }}>{tab.content.length} 字符</span>}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        {tab && <span>{getEncodingLabel(tab.encoding)}</span>}
-        {tab && <span>{tab.lineEnding}</span>}
-        {tab && <span>{tab.indentType === "tab" ? "制表符" : `${tab.indentSize} 空格`}</span>}
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {tab && <span style={{ opacity: 0.7 }}>{getEncodingLabel(tab.encoding)}</span>}
+        {tab && <span style={{ opacity: 0.25 }}>|</span>}
+        {tab && <span style={{ opacity: 0.7 }}>{tab.lineEnding}</span>}
+        {tab && <span style={{ opacity: 0.25 }}>|</span>}
+        {tab && <span style={{ opacity: 0.7 }}>{tab.indentType === "tab" ? "制表符" : `${tab.indentSize} 空格`}</span>}
       </div>
     </div>
   );
