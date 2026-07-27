@@ -6,16 +6,10 @@ import TabItem from "@/components/TabBar/TabItem";
 import TabContextMenu from "@/components/TabBar/TabContextMenu";
 import ContextMenu from "@/components/Common/ContextMenu";
 import Modal from "@/components/Common/Modal";
-import { removeNodeByPath, findTabsForDeletion } from "./fileTreeUtils";
-import type { TabColor } from "@/types";
+import { removeNodeByPath, findTabsForDeletion, buildTargetPath, isSameOrAncestorPath, moveNodeInTree, buildMovedPath } from "./fileTreeUtils";
+import type { TabColor, FileTreeNode } from "@/types";
 
-interface TreeNode {
-  name: string;
-  path: string;
-  isDir: boolean;
-  children?: TreeNode[];
-  expanded?: boolean;
-}
+type TreeNode = FileTreeNode;
 
 export default function FilePanel() {
   return (
@@ -182,6 +176,8 @@ function FileTreeSection() {
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [fileContextMenu, setFileContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<TreeNode | null>(null);
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+  const setFilePath = useTabStore((s) => s.setFilePath);
 
   const handleOpenFolder = async () => {
     try {
@@ -258,22 +254,100 @@ function FileTreeSection() {
     }
   };
 
+  const refreshDir = async (dirPath: string) => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const entries = await invoke<Array<{ name: string; path: string; is_dir: boolean }>>("list_directory", { path: dirPath });
+      setTree((prev) => {
+        const apply = (nodes: TreeNode[]): TreeNode[] =>
+          nodes.map((n) => {
+            if (n.path === dirPath && n.isDir) {
+              return {
+                ...n,
+                children: entries.map((e) => ({
+                  name: e.name, path: e.path, isDir: e.is_dir,
+                  children: e.is_dir ? [] : undefined, expanded: false,
+                })),
+              };
+            }
+            if (n.children) return { ...n, children: apply(n.children) };
+            return n;
+          });
+        return apply(prev);
+      });
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleDropOnDir = async (e: React.DragEvent, target: TreeNode) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverPath(null);
+    const sourcePath = e.dataTransfer.getData("application/x-node-path");
+    const sourceIsDir = e.dataTransfer.getData("application/x-node-isdir") === "true";
+    if (!sourcePath || sourcePath === target.path) return;
+    if (sourceIsDir && isSameOrAncestorPath(sourcePath, target.path)) {
+      window.alert("不能将文件夹移动到自身或其子目录中。");
+      return;
+    }
+    const sourceName = sourcePath.split(/[\\/]/).pop() || sourcePath;
+    const newPath = buildTargetPath(target.path, sourceName);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const entries = await invoke<Array<{ name: string; path: string; is_dir: boolean }>>("list_directory", { path: target.path });
+      if (entries.some((en) => en.name === sourceName)) {
+        window.alert(`目标文件夹已存在同名项「${sourceName}」，已取消移动。`);
+        return;
+      }
+      await invoke("rename_file", { oldPath: sourcePath, newPath });
+      setTree((prev) => moveNodeInTree(prev, sourcePath, target.path));
+      if (target.expanded) void refreshDir(target.path);
+      const sourcePrefix = sourcePath.endsWith("/") ? sourcePath : sourcePath + "/";
+      tabs
+        .filter((t) => !!t.filePath && (t.filePath === sourcePath || (sourceIsDir && t.filePath.startsWith(sourcePrefix))))
+        .forEach((t) => setFilePath(t.id, buildMovedPath(t.filePath!, sourcePath, newPath, sourceIsDir)));
+    } catch (err) {
+      window.alert(`移动失败：${err}`);
+    }
+  };
+
   const renderNode = (node: TreeNode, depth: number = 0) => (
     <div key={node.path}>
       <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("application/x-node-path", node.path);
+          e.dataTransfer.setData("application/x-node-isdir", String(node.isDir));
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onDragEnd={() => setDragOverPath(null)}
         onClick={() => toggleNode(node)}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
           setFileContextMenu({ x: e.clientX, y: e.clientY, node });
         }}
+        onDragOver={node.isDir ? (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = "move";
+          if (dragOverPath !== node.path) setDragOverPath(node.path);
+        } : undefined}
+        onDragLeave={node.isDir ? () => {
+          if (dragOverPath === node.path) setDragOverPath(null);
+        } : undefined}
+        onDrop={node.isDir ? (e) => handleDropOnDir(e, node) : undefined}
         style={{
           display: "flex", alignItems: "center", gap: 4,
           padding: "3px 8px 3px " + (8 + depth * 16) + "px",
           fontSize: 13, cursor: "pointer", color: "var(--text-secondary)",
+          borderRadius: 4,
+          outline: dragOverPath === node.path && node.isDir ? "1px dashed var(--accent)" : "none",
+          outlineOffset: -1,
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+        onMouseEnter={(e) => { if (dragOverPath !== node.path) e.currentTarget.style.background = "var(--bg-hover)"; }}
+        onMouseLeave={(e) => { if (dragOverPath !== node.path) e.currentTarget.style.background = "none"; }}
       >
         {node.isDir ? (
           node.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />

@@ -29,3 +29,108 @@ export function findTabsForDeletion(
   const prefix = path.endsWith("/") ? path : path + "/";
   return tabs.filter((t) => !!t.filePath && (t.filePath === path || t.filePath.startsWith(prefix)));
 }
+
+/**
+ * Find a node by its path anywhere in the tree.
+ */
+export function findNodeByPath(tree: FileTreeNode[], path: string): FileTreeNode | undefined {
+  for (const node of tree) {
+    if (node.path === path) return node;
+    if (node.children) {
+      const found = findNodeByPath(node.children, path);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Build the destination path for a file/dir moved into `targetDirPath`.
+ * Normalizes any trailing path separator on the directory.
+ */
+export function buildTargetPath(targetDirPath: string, name: string): string {
+  const base = targetDirPath.replace(/[\\/]+$/, "");
+  return `${base}/${name}`;
+}
+
+/**
+ * Guard against moving a directory into itself or one of its descendants.
+ * Returns true when `sourcePath` is the same as, or an ancestor of, `targetDirPath`.
+ */
+export function isSameOrAncestorPath(sourcePath: string, targetDirPath: string): boolean {
+  if (sourcePath === targetDirPath) return true;
+  const prefix = sourcePath.endsWith("/") ? sourcePath : sourcePath + "/";
+  return targetDirPath.startsWith(prefix);
+}
+
+/**
+ * Return a new tree reflecting a node moved from `sourcePath` into the
+ * directory at `targetDirPath`.
+ *
+ * - The source node is always removed from its original location (the move
+ *   has physically happened on disk).
+ * - If the target directory is currently expanded and its children are
+ *   loaded, the moved node (with an updated path) is appended to those
+ *   children. Otherwise the target side is left for the caller to refresh.
+ *
+ * Does not mutate the input tree.
+ */
+export function moveNodeInTree(
+  tree: FileTreeNode[],
+  sourcePath: string,
+  targetDirPath: string
+): FileTreeNode[] {
+  const sourceNode = findNodeByPath(tree, sourcePath);
+  if (!sourceNode) return tree;
+
+  let next = removeNodeByPath(tree, sourcePath);
+
+  const targetDir = findNodeByPath(next, targetDirPath);
+  if (targetDir && targetDir.isDir && targetDir.expanded && targetDir.children) {
+    const moved: FileTreeNode = {
+      ...sourceNode,
+      path: buildTargetPath(targetDirPath, sourceNode.name),
+    };
+    next = insertIntoDir(next, targetDirPath, moved);
+  }
+
+  return next;
+}
+
+function insertIntoDir(
+  nodes: FileTreeNode[],
+  targetDirPath: string,
+  moved: FileTreeNode
+): FileTreeNode[] {
+  return nodes.map((node) => {
+    if (node.path === targetDirPath && node.isDir) {
+      return { ...node, children: [...(node.children ?? []), moved] };
+    }
+    if (node.children) {
+      return { ...node, children: insertIntoDir(node.children, targetDirPath, moved) };
+    }
+    return node;
+  });
+}
+
+/**
+ * Compute the new filePath for a tab whose underlying file was moved from
+ * `sourcePath` to `newPath`. For a moved directory, every file beneath it
+ * gets its prefix rewritten.
+ */
+export function buildMovedPath(
+  filePath: string,
+  sourcePath: string,
+  newPath: string,
+  sourceIsDir: boolean
+): string {
+  if (filePath === sourcePath) return newPath;
+  if (sourceIsDir) {
+    const prefix = sourcePath.endsWith("/") ? sourcePath : sourcePath + "/";
+    if (filePath.startsWith(prefix)) {
+      const newPrefix = newPath.endsWith("/") ? newPath : newPath + "/";
+      return newPrefix + filePath.slice(prefix.length);
+    }
+  }
+  return filePath;
+}
