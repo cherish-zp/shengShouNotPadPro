@@ -7,6 +7,7 @@ import TabContextMenu from "@/components/TabBar/TabContextMenu";
 import ContextMenu from "@/components/Common/ContextMenu";
 import Modal from "@/components/Common/Modal";
 import { removeNodeByPath, findTabsForDeletion, buildTargetPath, isSameOrAncestorPath, moveNodeInTree, buildMovedPath } from "./fileTreeUtils";
+import { scrollContainerStyle } from "./panelLayout";
 import type { TabColor, FileTreeNode } from "@/types";
 
 type TreeNode = FileTreeNode;
@@ -105,7 +106,7 @@ function NotesSection() {
       )}
 
       {/* List */}
-      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+      <div style={scrollContainerStyle}>
         {filtered.length === 0 ? (
           <div style={{
             display: "flex", flexDirection: "column", alignItems: "center",
@@ -391,7 +392,7 @@ function FileTreeSection() {
       </div>
 
       {/* Tree */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      <div style={scrollContainerStyle}>
         {tree.length === 0 ? (
           <div style={{
             display: "flex", flexDirection: "column", alignItems: "center",
