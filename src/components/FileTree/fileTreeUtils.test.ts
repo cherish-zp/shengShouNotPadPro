@@ -160,14 +160,16 @@ describe("moveNodeInTree", () => {
     expect(sub.children!.map((c) => c.path)).toEqual(["/r/sub/c.txt", "/r/sub/a.txt"]);
   });
 
-  it("does not insert into a collapsed directory (refresh will populate)", () => {
+  it("expands a collapsed target directory and inserts the moved node", () => {
     const tree = [
       node("a.txt", "/r/a.txt", false),
       node("sub", "/r/sub", true, []),
     ];
     const result = moveNodeInTree(tree, "/r/a.txt", "/r/sub");
     expect(result.map((n) => n.path)).toEqual(["/r/sub"]);
-    expect(result[0].children).toEqual([]);
+    const sub = result.find((n) => n.path === "/r/sub")!;
+    expect(sub.expanded).toBe(true);
+    expect(sub.children!.map((c) => c.path)).toEqual(["/r/sub/a.txt"]);
   });
 
   it("moves a directory node and keeps its children reference", () => {

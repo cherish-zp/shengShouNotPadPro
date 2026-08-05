@@ -69,9 +69,10 @@ export function isSameOrAncestorPath(sourcePath: string, targetDirPath: string):
  *
  * - The source node is always removed from its original location (the move
  *   has physically happened on disk).
- * - If the target directory is currently expanded and its children are
- *   loaded, the moved node (with an updated path) is appended to those
- *   children. Otherwise the target side is left for the caller to refresh.
+ * - The target directory is always marked expanded and the moved node
+ *   (with an updated path) is appended to its children, so the move is
+ *   immediately visible. The caller should still refresh the target to
+ *   load its full on-disk contents.
  *
  * Does not mutate the input tree.
  */
@@ -86,7 +87,7 @@ export function moveNodeInTree(
   let next = removeNodeByPath(tree, sourcePath);
 
   const targetDir = findNodeByPath(next, targetDirPath);
-  if (targetDir && targetDir.isDir && targetDir.expanded && targetDir.children) {
+  if (targetDir && targetDir.isDir) {
     const moved: FileTreeNode = {
       ...sourceNode,
       path: buildTargetPath(targetDirPath, sourceNode.name),
@@ -104,7 +105,7 @@ function insertIntoDir(
 ): FileTreeNode[] {
   return nodes.map((node) => {
     if (node.path === targetDirPath && node.isDir) {
-      return { ...node, children: [...(node.children ?? []), moved] };
+      return { ...node, expanded: true, children: [...(node.children ?? []), moved] };
     }
     if (node.children) {
       return { ...node, children: insertIntoDir(node.children, targetDirPath, moved) };

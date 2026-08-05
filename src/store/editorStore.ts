@@ -7,6 +7,7 @@ interface PersistedUI {
   sidebarVisible?: boolean;
   markdownPreviewVisible?: boolean;
   activeSidebarView?: EditorStore["activeSidebarView"];
+  openFolder?: string | null;
 }
 
 function loadPersisted(): PersistedUI {
@@ -74,7 +75,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
   diffViewOpen: false,
   toolsPanelOpen: false,
   activeSidebarView: persisted.activeSidebarView ?? "tabs",
-  openFolder: null,
+  openFolder: persisted.openFolder ?? null,
   editorView: null,
   markdownPreviewVisible: persisted.markdownPreviewVisible ?? false,
 
@@ -113,5 +114,8 @@ export const useEditorStore = create<EditorStore>((set) => ({
     persist({ activeSidebarView: view });
     set({ activeSidebarView: view });
   },
-  setOpenFolder: (path) => set({ openFolder: path }),
+  setOpenFolder: (path) => {
+    persist({ openFolder: path });
+    set({ openFolder: path });
+  },
 }));

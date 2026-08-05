@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Search, StickyNote, Trash2 } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useTabStore } from "@/store/tabStore";
@@ -180,20 +180,33 @@ function FileTreeSection() {
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
   const setFilePath = useTabStore((s) => s.setFilePath);
 
+  const loadFolder = async (folderPath: string) => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const entries = await invoke<Array<{ name: string; path: string; is_dir: boolean }>>("list_directory", { path: folderPath });
+      setTree(entries.map((e) => ({
+        name: e.name, path: e.path, isDir: e.is_dir,
+        children: e.is_dir ? [] : undefined, expanded: false,
+      })));
+    } catch { /* 文件夹可能已不存在，忽略 */ }
+  };
+
   const handleOpenFolder = async () => {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const path = await invoke<string | null>("open_folder_dialog");
       if (path) {
         setOpenFolder(path);
-        const entries = await invoke<Array<{ name: string; path: string; is_dir: boolean }>>("list_directory", { path });
-        setTree(entries.map((e) => ({
-          name: e.name, path: e.path, isDir: e.is_dir,
-          children: e.is_dir ? [] : undefined, expanded: false,
-        })));
+        await loadFolder(path);
       }
     } catch { /* Dev mode fallback */ }
   };
+
+  // 启动时恢复上次打开的文件夹，让文件树在重启后仍可见
+  useEffect(() => {
+    if (!openFolder) return;
+    void loadFolder(openFolder);
+  }, []); // 仅挂载时执行一次
 
   const toggleNode = async (node: TreeNode) => {
     if (!node.isDir) {
@@ -303,7 +316,7 @@ function FileTreeSection() {
       }
       await invoke("rename_file", { oldPath: sourcePath, newPath });
       setTree((prev) => moveNodeInTree(prev, sourcePath, target.path));
-      if (target.expanded) void refreshDir(target.path);
+      void refreshDir(target.path);
       const sourcePrefix = sourcePath.endsWith("/") ? sourcePath : sourcePath + "/";
       tabs
         .filter((t) => !!t.filePath && (t.filePath === sourcePath || (sourceIsDir && t.filePath.startsWith(sourcePrefix))))
