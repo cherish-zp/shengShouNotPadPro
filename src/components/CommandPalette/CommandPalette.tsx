@@ -35,8 +35,8 @@ export default function CommandPalette() {
     resetZoom: () => settingsStore.updateSetting("fontSize", 14),
     openSettings: () => editorStore.setSettingsOpen(true),
     openDiff: () => editorStore.setDiffViewOpen(true),
-    openTools: () => editorStore.setActiveSidebarView("tools"),
-    openPlugins: () => editorStore.setActiveSidebarView("plugins"),
+    openTools: () => editorStore.openSidebarView("tools"),
+    openPlugins: () => editorStore.openSidebarView("plugins"),
     openFolder: () => {},
     zenMode: () => { editorStore.toggleSidebar(); },
   }), [tabStore, editorStore, searchStore, settingsStore]);

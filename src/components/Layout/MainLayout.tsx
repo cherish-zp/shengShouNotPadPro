@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useEditorStore } from "@/store/editorStore";
 import { useTabStore } from "@/store/tabStore";
-import Sidebar from "./Sidebar";
+import { SidebarRail, SidebarContent } from "./Sidebar";
 import StatusBar from "./StatusBar";
 import EditorContainer from "@/components/Editor/EditorContainer";
 import EditorToolbar from "@/components/Editor/EditorToolbar";
@@ -47,7 +47,10 @@ export default function MainLayout() {
   return (
     <div style={{ display: "flex", flexDirection: "column", width: "100vw", height: "100vh", overflow: "hidden" }}>
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Sidebar */}
+        {/* 固定左侧图标栏：始终可见 */}
+        <SidebarRail />
+
+        {/* 侧边栏内容面板：可折叠（⌘B） */}
         {sidebarVisible && (
           <div
             style={{
@@ -57,7 +60,7 @@ export default function MainLayout() {
               animation: "slideInLeft 200ms ease",
             }}
           >
-            <Sidebar />
+            <SidebarContent />
           </div>
         )}
 

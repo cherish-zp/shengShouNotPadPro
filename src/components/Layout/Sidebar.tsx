@@ -13,80 +13,80 @@ const VIEWS = [
   { id: "plugins" as const, icon: Puzzle, label: "插件" },
 ];
 
-export default function Sidebar() {
+/**
+ * 固定显示的左侧图标栏：始终可见（不受 sidebarVisible 影响）。
+ * 点击图标会展开侧边栏内容面板并切换到对应视图，确保侧边栏不会被「弄丢」。
+ */
+export function SidebarRail() {
   const activeView = useEditorStore((s) => s.activeSidebarView);
-  const setActiveView = useEditorStore((s) => s.setActiveSidebarView);
+  const openSidebarView = useEditorStore((s) => s.openSidebarView);
   const setSettingsOpen = useEditorStore((s) => s.setSettingsOpen);
 
-  const renderContent = () => {
-    // 旧的 "tabs" 视图兼容：自动映射到 "files"
-    const view = activeView === "tabs" ? "files" : activeView;
-    switch (view) {
-      case "files": return <FilePanel />;
-      case "search": return <GlobalSearch />;
-      case "tools": return <ToolsPanel />;
-      case "plugins": return <PluginPanel />;
-      default: return <FilePanel />;
-    }
-  };
+  const isActive = (id: string) => activeView === id || (activeView === "tabs" && id === "files");
 
   return (
-    <div style={{ display: "flex", height: "100%", background: "var(--bg-primary)" }}>
-      {/* Icon bar */}
-      <div
-        style={{
-          width: 48, display: "flex", flexDirection: "column", alignItems: "center",
-          padding: "10px 0", gap: 4,
-          borderRight: "1px solid var(--border)", flexShrink: 0,
-        }}
-      >
-        {VIEWS.map(({ id, icon: Icon, label }) => (
+    <div
+      style={{
+        width: 48, display: "flex", flexDirection: "column", alignItems: "center",
+        padding: "10px 0", gap: 4,
+        borderRight: "1px solid var(--border)", flexShrink: 0,
+        background: "var(--bg-primary)",
+      }}
+    >
+      {VIEWS.map(({ id, icon: Icon, label }) => {
+        const active = isActive(id);
+        return (
           <button
             key={id}
-            onClick={() => setActiveView(id)}
+            onClick={() => openSidebarView(id)}
             title={label}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               width: 36, height: 36, borderRadius: 10,
-              color: activeView === id ? "var(--accent)" : "var(--text-secondary)",
-              background: activeView === id ? "var(--selection)" : "transparent",
+              color: active ? "var(--accent)" : "var(--text-secondary)",
+              background: active ? "var(--selection)" : "transparent",
               cursor: "pointer",
               transition: "all 180ms cubic-bezier(0.4, 0, 0.2, 1)",
-              boxShadow: activeView === id ? "var(--accent-glow)" : "none",
+              boxShadow: active ? "var(--accent-glow)" : "none",
             }}
-            onMouseEnter={(e) => { if (activeView !== id) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; } }}
-            onMouseLeave={(e) => { if (activeView !== id) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; } }}
+            onMouseEnter={(e) => { if (!active) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; } }}
+            onMouseLeave={(e) => { if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; } }}
           >
             <Icon size={19} />
           </button>
-        ))}
-        <div style={{ flex: 1 }} />
-        <button
-          onClick={() => setSettingsOpen(true)}
-          title="设置"
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 36, height: 36, borderRadius: 10,
-            color: "var(--text-secondary)", cursor: "pointer",
-            transition: "all 180ms cubic-bezier(0.4, 0, 0.2, 1)",
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-secondary)"; }}
-        >
-          <Settings size={19} />
-        </button>
-      </div>
-
-      {/* Content panel */}
-      <div
+        );
+      })}
+      <div style={{ flex: 1 }} />
+      <button
+        onClick={() => setSettingsOpen(true)}
+        title="设置"
         style={{
-          flex: 1, overflow: "hidden", display: "flex", flexDirection: "column",
-          minWidth: 0,
-          background: "var(--bg-primary)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: 36, height: 36, borderRadius: 10,
+          color: "var(--text-secondary)", cursor: "pointer",
+          transition: "all 180ms cubic-bezier(0.4, 0, 0.2, 1)",
         }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-secondary)"; }}
       >
-        {renderContent()}
-      </div>
+        <Settings size={19} />
+      </button>
+    </div>
+  );
+}
+
+/** 侧边栏内容面板：按当前视图渲染（仅在 sidebarVisible 时由 MainLayout 挂载） */
+export function SidebarContent() {
+  const activeView = useEditorStore((s) => s.activeSidebarView);
+  const view = activeView === "tabs" ? "files" : activeView;
+  return (
+    <div
+      style={{
+        flex: 1, overflow: "hidden", display: "flex", flexDirection: "column",
+        minWidth: 0, background: "var(--bg-primary)",
+      }}
+    >
+      {view === "files" ? <FilePanel /> : view === "search" ? <GlobalSearch /> : view === "tools" ? <ToolsPanel /> : view === "plugins" ? <PluginPanel /> : <FilePanel />}
     </div>
   );
 }

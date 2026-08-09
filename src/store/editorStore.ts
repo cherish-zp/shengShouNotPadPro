@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { EditorView } from "@codemirror/view";
+import { selectSidebarView } from "@/utils/sidebarState";
 
 const PERSIST_KEY = "novaedit-editor-ui";
 
@@ -58,6 +59,7 @@ interface EditorStore {
   setDiffViewOpen: (open: boolean) => void;
   setToolsPanelOpen: (open: boolean) => void;
   setActiveSidebarView: (view: EditorStore["activeSidebarView"]) => void;
+  openSidebarView: (view: EditorStore["activeSidebarView"]) => void;
   openFolder: string | null;
   setOpenFolder: (path: string | null) => void;
   markdownPreviewVisible: boolean;
@@ -113,6 +115,11 @@ export const useEditorStore = create<EditorStore>((set) => ({
   setActiveSidebarView: (view) => {
     persist({ activeSidebarView: view });
     set({ activeSidebarView: view });
+  },
+  openSidebarView: (view) => {
+    const next = selectSidebarView(view);
+    persist({ sidebarVisible: next.sidebarVisible, activeSidebarView: next.activeSidebarView });
+    set(next);
   },
   setOpenFolder: (path) => {
     persist({ openFolder: path });
