@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useTabStore } from "@/store/tabStore";
 import { useTauri } from "@/hooks/useTauri";
 import { detectLanguageFromExtension } from "@/utils/encoding";
+import { useEditorStore } from "@/store/editorStore";
+import { partitionDroppedPaths, type DroppedItem } from "@/utils/dropHandler";
 
 interface UseFileDropOptions {
   /** 是否禁用拖放（如打开 Modal 时） */
@@ -21,6 +23,8 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
   const addTab = useTabStore((s) => s.addTab);
   const { readFile, detectEncoding } = useTauri();
   const [isDragging, setIsDragging] = useState(false);
+  const setOpenFolder = useEditorStore((s) => s.setOpenFolder);
+  const openSidebarView = useEditorStore((s) => s.openSidebarView);
 
   // 通过文件路径打开（Tauri 环境）
   const openByPath = async (path: string) => {
@@ -65,6 +69,30 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
     }
   };
 
+  // 处理拖入的路径：文件夹在左下方文件树区域打开，文件作为便签打开
+  const handleDroppedPaths = async (paths: string[]) => {
+    const items: DroppedItem[] = [];
+    for (const p of paths) {
+      let isDir = false;
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const info = await invoke<{ is_dir: boolean }>("get_file_info", { path: p });
+        isDir = info.is_dir;
+      } catch {
+        isDir = false;
+      }
+      items.push({ path: p, isDir });
+    }
+    const { folders, files } = partitionDroppedPaths(items);
+    if (folders.length > 0) {
+      setOpenFolder(folders[0]);
+      openSidebarView("files");
+    }
+    for (const f of files) {
+      void openByPath(f);
+    }
+  };
+
   // Tauri 原生文件拖放监听
   useEffect(() => {
     if (disabled) return;
@@ -88,9 +116,7 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
           } else if (payload.type === "drop") {
             setIsDragging(false);
             const paths = payload.paths || [];
-            paths.forEach((p) => {
-              void openByPath(p);
-            });
+            void handleDroppedPaths(paths);
           }
         });
         unlisten = off;

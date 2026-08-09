@@ -193,17 +193,17 @@ function FileTreeSection() {
       const { invoke } = await import("@tauri-apps/api/core");
       const path = await invoke<string | null>("open_folder_dialog");
       if (path) {
-        setOpenFolder(path);
-        await loadFolder(path);
+        setOpenFolder(path); // openFolder 变化会触发下方 useEffect 重新加载文件树
       }
     } catch { /* Dev mode fallback */ }
   };
 
-  // 启动时恢复上次打开的文件夹，让文件树在重启后仍可见
+  // openFolder 变化（打开文件夹 / 拖入文件夹 / 启动恢复）时重新加载文件树
   useEffect(() => {
     if (!openFolder) return;
     void loadFolder(openFolder);
-  }, []); // 仅挂载时执行一次
+    // 仅依赖 openFolder，避免每次渲染重复加载
+  }, [openFolder]);
 
   const toggleNode = async (node: TreeNode) => {
     if (!node.isDir) {
