@@ -6,7 +6,7 @@ import TabItem from "@/components/TabBar/TabItem";
 import TabContextMenu from "@/components/TabBar/TabContextMenu";
 import ContextMenu from "@/components/Common/ContextMenu";
 import Modal from "@/components/Common/Modal";
-import { removeNodeByPath, findTabsForDeletion, buildTargetPath, isSameOrAncestorPath, moveNodeInTree, buildMovedPath } from "./fileTreeUtils";
+import { removeNodeByPath, findTabsForDeletion, buildTargetPath, isSameOrAncestorPath, moveNodeInTree, buildMovedPath, buildFileTreeNodes } from "./fileTreeUtils";
 import { scrollContainerStyle } from "./panelLayout";
 import type { TabColor, FileTreeNode } from "@/types";
 
@@ -184,10 +184,7 @@ function FileTreeSection() {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const entries = await invoke<Array<{ name: string; path: string; is_dir: boolean }>>("list_directory", { path: folderPath });
-      setTree(entries.map((e) => ({
-        name: e.name, path: e.path, isDir: e.is_dir,
-        children: e.is_dir ? [] : undefined, expanded: false,
-      })));
+      setTree(buildFileTreeNodes(entries));
     } catch { /* 文件夹可能已不存在，忽略 */ }
   };
 
@@ -278,10 +275,7 @@ function FileTreeSection() {
             if (n.path === dirPath && n.isDir) {
               return {
                 ...n,
-                children: entries.map((e) => ({
-                  name: e.name, path: e.path, isDir: e.is_dir,
-                  children: e.is_dir ? [] : undefined, expanded: false,
-                })),
+                children: buildFileTreeNodes(entries),
               };
             }
             if (n.children) return { ...n, children: apply(n.children) };
@@ -409,14 +403,16 @@ function FileTreeSection() {
         {tree.length === 0 ? (
           <div style={{
             display: "flex", flexDirection: "column", alignItems: "center",
-            justifyContent: "center", padding: "16px 0", gap: 8,
-            color: "var(--text-secondary)", fontSize: 12, opacity: 0.5,
+            justifyContent: "center", padding: "24px 12px", gap: 10,
+            color: "var(--text-secondary)", fontSize: 12,
           }}>
+            <FolderOpen size={26} style={{ opacity: 0.4 }} />
+            <span style={{ opacity: 0.7 }}>未打开文件夹</span>
             <button
               onClick={handleOpenFolder}
               style={{
-                padding: "6px 12px", borderRadius: 6, fontSize: 12,
-                background: "var(--bg-hover)", color: "var(--text-primary)", cursor: "pointer",
+                padding: "7px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                background: "var(--accent)", color: "#fff", cursor: "pointer", border: "none",
               }}
             >
               打开文件夹

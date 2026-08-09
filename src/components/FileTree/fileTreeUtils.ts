@@ -135,3 +135,28 @@ export function buildMovedPath(
   }
   return filePath;
 }
+
+
+/**
+ * Convert raw directory entries (as returned by the `list_directory` Tauri
+ * command) into file-tree nodes.
+ *
+ * Directories are sorted before files, and within each group names are
+ * compared case-insensitively, so the file area always displays a stable,
+ * readable listing regardless of the underlying filesystem order.
+ */
+export function buildFileTreeNodes(
+  entries: Array<{ name: string; path: string; is_dir: boolean }>
+): FileTreeNode[] {
+  const sorted = [...entries].sort((a, b) => {
+    if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  });
+  return sorted.map((e) => ({
+    name: e.name,
+    path: e.path,
+    isDir: e.is_dir,
+    children: e.is_dir ? [] : undefined,
+    expanded: false,
+  }));
+}

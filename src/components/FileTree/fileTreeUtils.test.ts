@@ -6,6 +6,7 @@ import {
   isSameOrAncestorPath,
   moveNodeInTree,
   buildMovedPath,
+  buildFileTreeNodes,
 } from "./fileTreeUtils";
 import type { FileTreeNode, Tab } from "@/types";
 
@@ -224,5 +225,31 @@ describe("buildMovedPath", () => {
 
   it("returns the original path when unrelated", () => {
     expect(buildMovedPath("/r/other/x.txt", "/r/sub", "/r/sub2", true)).toBe("/r/other/x.txt");
+  });
+});
+
+describe("buildFileTreeNodes", () => {
+  const e = (name: string, path: string, is_dir: boolean) => ({ name, path, is_dir });
+
+  it("maps entries to nodes: dirs get empty children, files get none", () => {
+    const nodes = buildFileTreeNodes([e("a.txt", "/r/a.txt", false), e("sub", "/r/sub", true)]);
+    expect(nodes).toEqual([
+      { name: "sub", path: "/r/sub", isDir: true, children: [], expanded: false },
+      { name: "a.txt", path: "/r/a.txt", isDir: false, children: undefined, expanded: false },
+    ]);
+  });
+
+  it("sorts directories first, then files alphabetically (case-insensitive)", () => {
+    const nodes = buildFileTreeNodes([
+      e("z.txt", "/r/z.txt", false),
+      e("a.txt", "/r/a.txt", false),
+      e("Bdir", "/r/Bdir", true),
+      e("adir", "/r/adir", true),
+    ]);
+    expect(nodes.map((n) => n.name)).toEqual(["adir", "Bdir", "a.txt", "z.txt"]);
+  });
+
+  it("returns an empty array for no entries", () => {
+    expect(buildFileTreeNodes([])).toEqual([]);
   });
 });
