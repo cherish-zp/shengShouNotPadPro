@@ -7,6 +7,9 @@ import {
   moveNodeInTree,
   buildMovedPath,
   buildFileTreeNodes,
+  isHiddenName,
+  filterHiddenNodes,
+  filterTreeByQuery,
 } from "./fileTreeUtils";
 import type { FileTreeNode, Tab } from "@/types";
 
@@ -251,5 +254,132 @@ describe("buildFileTreeNodes", () => {
 
   it("returns an empty array for no entries", () => {
     expect(buildFileTreeNodes([])).toEqual([]);
+  });
+});
+
+
+describe("isHiddenName", () => {
+  it("returns true for names starting with a dot", () => {
+    expect(isHiddenName(".git")).toBe(true);
+    expect(isHiddenName(".DS_Store")).toBe(true);
+    expect(isHiddenName(".env.local")).toBe(true);
+  });
+
+  it("returns false for normal names", () => {
+    expect(isHiddenName("src")).toBe(false);
+    expect(isHiddenName("README.md")).toBe(false);
+    expect(isHiddenName("main.ts")).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(isHiddenName("")).toBe(false);
+  });
+});
+
+describe("filterHiddenNodes", () => {
+  it("removes top-level hidden files and directories", () => {
+    const tree = [
+      node(".git", "/r/.git", true),
+      node("src", "/r/src", true),
+      node(".DS_Store", "/r/.DS_Store", false),
+      node("README.md", "/r/README.md", false),
+    ];
+    const result = filterHiddenNodes(tree);
+    expect(result.map((n) => n.name)).toEqual(["src", "README.md"]);
+  });
+
+  it("removes hidden entries inside nested directories", () => {
+    const tree = [
+      node("src", "/r/src", true, [
+        node(".hidden", "/r/src/.hidden", false),
+        node("main.ts", "/r/src/main.ts", false),
+        node(".cache", "/r/src/.cache", true, [node("temp.txt", "/r/src/.cache/temp.txt", false)]),
+      ]),
+    ];
+    const result = filterHiddenNodes(tree);
+    expect(result[0].children!.map((n) => n.name)).toEqual(["main.ts"]);
+  });
+
+  it("does not mutate the original tree", () => {
+    const tree = [node(".git", "/r/.git", true), node("src", "/r/src", true)];
+    const snapshot = JSON.stringify(tree);
+    filterHiddenNodes(tree);
+    expect(JSON.stringify(tree)).toBe(snapshot);
+  });
+
+  it("returns empty array for all-hidden tree", () => {
+    const tree = [node(".git", "/r/.git", true), node(".env", "/r/.env", false)];
+    expect(filterHiddenNodes(tree)).toEqual([]);
+  });
+});
+
+describe("filterTreeByQuery", () => {
+  it("returns all nodes when query is empty", () => {
+    const tree = [node("a.txt", "/r/a.txt", false), node("b", "/r/b", true)];
+    const result = filterTreeByQuery(tree, "");
+    expect(result).toHaveLength(2);
+  });
+
+  it("filters top-level nodes by name (case-insensitive)", () => {
+    const tree = [
+      node("hello.txt", "/r/hello.txt", false),
+      node("world.md", "/r/world.md", false),
+      node("HELLO.js", "/r/HELLO.js", false),
+    ];
+    const result = filterTreeByQuery(tree, "hello");
+    expect(result.map((n) => n.name)).toEqual(["hello.txt", "HELLO.js"]);
+  });
+
+  it("keeps parent directories when a child matches", () => {
+    const tree = [
+      node("src", "/r/src", true, [
+        node("components", "/r/src/components", true, [
+          node("Button.tsx", "/r/src/components/Button.tsx", false),
+        ]),
+        node("utils.ts", "/r/src/utils.ts", false),
+      ]),
+      node("docs", "/r/docs", true, [node("readme.md", "/r/docs/readme.md", false)]),
+    ];
+    tree[0].children![0].expanded = true;
+    const result = filterTreeByQuery(tree, "Button");
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe("src");
+    expect(result[0].children).toHaveLength(1);
+    expect(result[0].children![0].name).toBe("components");
+    expect(result[0].children![0].children).toHaveLength(1);
+    expect(result[0].children![0].children![0].name).toBe("Button.tsx");
+  });
+
+  it("matches directory names themselves", () => {
+    const tree = [
+      node("src", "/r/src", true, [node("main.ts", "/r/src/main.ts", false)]),
+      node("public", "/r/public", true),
+    ];
+    const result = filterTreeByQuery(tree, "src");
+    expect(result.map((n) => n.name)).toEqual(["src"]);
+    // Keep children of matched directory
+    expect(result[0].children).toHaveLength(1);
+  });
+
+  it("returns empty array when nothing matches", () => {
+    const tree = [node("a.txt", "/r/a.txt", false)];
+    expect(filterTreeByQuery(tree, "zzz")).toEqual([]);
+  });
+
+  it("does not mutate the original tree", () => {
+    const tree = [node("a.txt", "/r/a.txt", false), node("b.txt", "/r/b.txt", false)];
+    const snapshot = JSON.stringify(tree);
+    filterTreeByQuery(tree, "a");
+    expect(JSON.stringify(tree)).toBe(snapshot);
+  });
+
+  it("matches partial names anywhere in the name", () => {
+    const tree = [
+      node("foobar.txt", "/r/foobar.txt", false),
+      node("bazfoo.md", "/r/bazfoo.md", false),
+      node("test.js", "/r/test.js", false),
+    ];
+    const result = filterTreeByQuery(tree, "foo");
+    expect(result.map((n) => n.name)).toEqual(["foobar.txt", "bazfoo.md"]);
   });
 });

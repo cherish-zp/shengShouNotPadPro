@@ -4,6 +4,7 @@ import { useTauri } from "@/hooks/useTauri";
 import { detectLanguageFromExtension } from "@/utils/encoding";
 import { useEditorStore } from "@/store/editorStore";
 import { partitionDroppedPaths, type DroppedItem } from "@/utils/dropHandler";
+import { classifyFileExtension } from "@/utils/quarantine";
 
 interface UseFileDropOptions {
   /** 是否禁用拖放（如打开 Modal 时） */
@@ -31,7 +32,14 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
     const name = path.split(/[\\/]/).pop() || path;
     const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
     const language = detectLanguageFromExtension(ext);
+    const safety = classifyFileExtension(name);
     try {
+      // 拖入文件时先清除 macOS 隔离属性，避免之后从 Finder 打开弹警告
+      if (safety !== "caution") {
+        import("@tauri-apps/api/core").then(({ invoke }) => {
+          invoke("remove_quarantine", { path, recursive: false }).catch(() => {});
+        }).catch(() => {});
+      }
       // 先尝试自动检测编码，失败则回落到 UTF-8
       let encoding = "UTF-8";
       try {

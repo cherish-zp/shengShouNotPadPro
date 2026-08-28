@@ -307,3 +307,38 @@ pub fn list_directory_recursive(path: String) -> Result<Vec<DirEntry>, String> {
     walk(Path::new(&path), &mut result)?;
     Ok(result)
 }
+
+/// 移除文件或文件夹的 macOS 隔离属性（com.apple.quarantine），
+/// 避免从网络下载的文件在打开时弹出「无法验证是否包含恶意软件」的警告。
+/// 非 macOS 平台下直接返回 Ok(())，无操作。
+#[tauri::command]
+pub fn remove_quarantine(path: String, recursive: bool) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        let mut cmd = Command::new("xattr");
+        cmd.arg("-d").arg("com.apple.quarantine");
+        if recursive {
+            cmd.arg("-r");
+        }
+        cmd.arg(&path);
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to run xattr: {}", e))?;
+        // xattr 在属性不存在时会返回非零退出码，但这不是错误
+        // 只在启动失败等严重错误时报错
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // "No such xattr" 是正常情况，忽略
+            if !stderr.contains("No such xattr") {
+                return Err(format!("xattr failed: {}", stderr.trim()));
+            }
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        let _ = recursive;
+    }
+    Ok(())
+}

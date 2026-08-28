@@ -28,11 +28,14 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "app"],
+    "targets": [
+      "dmg",
+      "app"
+    ],
     "category": "DeveloperTool",
-    "shortDescription": "轻量极速的便签编辑器",
-    "longDescription": "NotePadPro — 轻量、极速、跨编码、Markdown 预览的便签 / 代码 / 终端编辑器",
-    "copyright": "© 2026 NotePadPro",
+    "shortDescription": "\u8f7b\u91cf\u6781\u901f\u7684\u4fbf\u7b7e\u7f16\u8f91\u5668",
+    "longDescription": "NotePadPro \u2014 \u8f7b\u91cf\u3001\u6781\u901f\u3001\u8de8\u7f16\u7801\u3001Markdown \u9884\u89c8\u7684\u4fbf\u7b7e / \u4ee3\u7801 / \u7ec8\u7aef\u7f16\u8f91\u5668",
+    "copyright": "\u00a9 2026 NotePadPro",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -45,6 +48,108 @@
       "frameworks": [],
       "signingIdentity": null,
       "entitlements": null
-    }
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "txt",
+          "md",
+          "markdown",
+          "rst"
+        ],
+        "name": "Text Documents",
+        "role": "Editor",
+        "mimeType": "text/plain"
+      },
+      {
+        "ext": [
+          "json",
+          "yaml",
+          "yml",
+          "toml",
+          "xml",
+          "csv",
+          "tsv"
+        ],
+        "name": "Data Documents",
+        "role": "Editor"
+      },
+      {
+        "ext": [
+          "sql",
+          "hql",
+          "prql"
+        ],
+        "name": "SQL Scripts",
+        "role": "Editor"
+      },
+      {
+        "ext": [
+          "js",
+          "jsx",
+          "ts",
+          "tsx",
+          "mjs",
+          "cjs"
+        ],
+        "name": "JavaScript/TypeScript",
+        "role": "Editor"
+      },
+      {
+        "ext": [
+          "py",
+          "rb",
+          "php",
+          "java",
+          "kt",
+          "go",
+          "rs",
+          "c",
+          "h",
+          "cpp",
+          "hpp",
+          "cs",
+          "swift"
+        ],
+        "name": "Source Code",
+        "role": "Editor"
+      },
+      {
+        "ext": [
+          "html",
+          "htm",
+          "css",
+          "scss",
+          "sass",
+          "less"
+        ],
+        "name": "Web Documents",
+        "role": "Editor"
+      },
+      {
+        "ext": [
+          "sh",
+          "bash",
+          "zsh",
+          "fish",
+          "ps1"
+        ],
+        "name": "Shell Scripts",
+        "role": "Editor"
+      },
+      {
+        "ext": [
+          "log",
+          "diff",
+          "patch",
+          "env",
+          "cfg",
+          "conf",
+          "ini"
+        ],
+        "name": "Config/Log Files",
+        "role": "Editor"
+      }
+    ]
   }
 }

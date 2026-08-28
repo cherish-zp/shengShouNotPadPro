@@ -3,6 +3,7 @@ mod state;
 mod utils;
 
 use state::AppState;
+use tauri::Emitter;
 
 pub fn run() {
     tauri::Builder::default()
@@ -38,7 +39,50 @@ pub fn run() {
             commands::clipboard::set_clipboard_text,
             commands::file_ops::add_recent_file,
             commands::file_ops::list_recent_files,
+            commands::file_ops::remove_quarantine,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running NotePadPro");
+        .build(tauri::generate_context!())
+        .expect("error while building NotePadPro")
+        .run(|app, event| {
+            // 从 Finder / 右键「打开方式」打开文件时：
+            // 1. 自动移除 macOS 隔离属性（下一次打开就不会弹警告了）
+            // 2. 通知前端把文件真正打开到编辑器中
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = &event {
+                use std::process::Command;
+                let mut file_paths: Vec<String> = Vec::new();
+                let mut folder_paths: Vec<String> = Vec::new();
+                for url in urls {
+                    if url.scheme() != "file" {
+                        continue;
+                    }
+                    if let Ok(path) = url.to_file_path() {
+                        let path_str = path.to_string_lossy().to_string();
+                        let ext = path
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("")
+                            .to_lowercase();
+                        let is_bundle = matches!(ext.as_str(), "app" | "pkg" | "dmg" | "exe" | "msi");
+                        if !is_bundle {
+                            let _ = Command::new("xattr")
+                                .args(["-d", "com.apple.quarantine", &path_str])
+                                .status();
+                        }
+                        let is_dir = path.is_dir();
+                        if is_dir {
+                            folder_paths.push(path_str);
+                        } else if !is_bundle {
+                            file_paths.push(path_str);
+                        }
+                    }
+                }
+                if !file_paths.is_empty() {
+                    let _ = app.emit("opened-files", &file_paths);
+                }
+                if !folder_paths.is_empty() {
+                    let _ = app.emit("opened-folders", &folder_paths);
+                }
+            }
+        });
 }

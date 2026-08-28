@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, highlightActiveLine, rectangularSelection, crosshairCursor } from "@codemirror/view";
+import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, highlightActiveLine } from "@codemirror/view";
 import { EditorState, type Extension, Compartment } from "@codemirror/state";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { syntaxHighlighting, indentOnInput, bracketMatching, foldGutter, foldKeymap, HighlightStyle } from "@codemirror/language";
@@ -22,6 +22,7 @@ import { go } from "@codemirror/lang-go";
 import { useTabStore } from "@/store/tabStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useEditorStore } from "@/store/editorStore";
+import { middleButtonRectSelection } from "@/utils/cm/rectSelection";
 
 interface CodeEditorProps {
   tabId: string;
@@ -183,8 +184,7 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
       highlightActiveLine(),
       highlightActiveLineGutter(),
       highlightSelectionMatches(),
-      rectangularSelection(),
-      crosshairCursor(),
+      middleButtonRectSelection(),
       keymap.of([
         ...closeBracketsKeymap,
         ...defaultKeymap,

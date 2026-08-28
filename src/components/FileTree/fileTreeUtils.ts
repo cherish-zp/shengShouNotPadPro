@@ -160,3 +160,65 @@ export function buildFileTreeNodes(
     expanded: false,
   }));
 }
+
+
+/**
+ * Check whether a file or directory name is "hidden" (starts with a dot).
+ */
+export function isHiddenName(name: string): boolean {
+  return name.length > 0 && name[0] === ".";
+}
+
+/**
+ * Return a new tree with all hidden files and directories removed.
+ * A node is hidden when its name starts with ".".
+ * Does not mutate the input tree.
+ */
+export function filterHiddenNodes(tree: FileTreeNode[]): FileTreeNode[] {
+  return tree
+    .filter((node) => !isHiddenName(node.name))
+    .map((node) => ({
+      ...node,
+      children: node.children ? filterHiddenNodes(node.children) : node.children,
+    }));
+}
+
+/**
+ * Return a new tree containing only nodes whose name matches `query`
+ * (case-insensitive substring match), plus all ancestor directories so
+ * the path context is preserved.
+ *
+ * - When a directory name matches, all its children are kept.
+ * - When only a descendant matches, the directory is kept but only the
+ *   matching subtree is included.
+ * - An empty query returns the tree unchanged.
+ *
+ * Does not mutate the input tree.
+ */
+export function filterTreeByQuery(tree: FileTreeNode[], query: string): FileTreeNode[] {
+  if (!query) return tree.map((n) => ({ ...n, children: n.children ? filterTreeByQuery(n.children, query) : n.children }));
+
+  const lowerQuery = query.toLowerCase();
+
+  function walk(nodes: FileTreeNode[]): FileTreeNode[] {
+    const result: FileTreeNode[] = [];
+    for (const node of nodes) {
+      const nameMatch = node.name.toLowerCase().includes(lowerQuery);
+
+      if (nameMatch) {
+        result.push({ ...node, children: node.children ? node.children.map((c) => ({ ...c, children: c.children ? walk(c.children) : c.children })) : node.children });
+        continue;
+      }
+
+      if (node.children) {
+        const filteredChildren = walk(node.children);
+        if (filteredChildren.length > 0) {
+          result.push({ ...node, children: filteredChildren });
+        }
+      }
+    }
+    return result;
+  }
+
+  return walk(tree);
+}

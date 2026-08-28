@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Search, StickyNote, Trash2 } from "lucide-react";
+import { FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Search, StickyNote, Trash2, Eye, EyeOff, Shield } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useTabStore } from "@/store/tabStore";
 import TabItem from "@/components/TabBar/TabItem";
 import TabContextMenu from "@/components/TabBar/TabContextMenu";
 import ContextMenu from "@/components/Common/ContextMenu";
 import Modal from "@/components/Common/Modal";
-import { removeNodeByPath, findTabsForDeletion, buildTargetPath, isSameOrAncestorPath, moveNodeInTree, buildMovedPath, buildFileTreeNodes } from "./fileTreeUtils";
+import { removeNodeByPath, findTabsForDeletion, buildTargetPath, isSameOrAncestorPath, moveNodeInTree, buildMovedPath, buildFileTreeNodes, filterHiddenNodes, filterTreeByQuery } from "./fileTreeUtils";
+import { classifyFileExtension } from "@/utils/quarantine";
 import { scrollContainerStyle } from "./panelLayout";
 import type { TabColor, FileTreeNode } from "@/types";
 
@@ -178,7 +179,20 @@ function FileTreeSection() {
   const [fileContextMenu, setFileContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<TreeNode | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+  const [fileSearchQuery, setFileSearchQuery] = useState("");
+  const [showFileSearch, setShowFileSearch] = useState(false);
+  const [showHidden, setShowHidden] = useState(() => {
+    try { return localStorage.getItem("npp-show-hidden") === "true"; } catch { return false; }
+  });
   const setFilePath = useTabStore((s) => s.setFilePath);
+
+  const toggleShowHidden = () => {
+    setShowHidden((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("npp-show-hidden", String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   const loadFolder = async (folderPath: string) => {
     try {
@@ -209,6 +223,11 @@ function FileTreeSection() {
     if (!node.isDir) {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
+        // 打开前先移除 macOS 隔离属性，避免下载的文件弹出安全警告
+        const safety = classifyFileExtension(node.name);
+        if (safety !== "caution") {
+          invoke("remove_quarantine", { path: node.path, recursive: false }).catch(() => {});
+        }
         const result = await invoke<{ content: string; encoding: string }>("read_file", { path: node.path, encoding: "UTF-8" });
         addTab({ name: node.name, filePath: node.path, content: result.content, encoding: result.encoding });
       } catch {
@@ -369,6 +388,13 @@ function FileTreeSection() {
     </div>
   );
 
+  const filteredTree = (() => {
+    let result = tree;
+    if (!showHidden) result = filterHiddenNodes(result);
+    if (fileSearchQuery) result = filterTreeByQuery(result, fileSearchQuery);
+    return result;
+  })();
+
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: 80, flex: "0 1 50%" }}>
       {/* Header */}
@@ -383,20 +409,69 @@ function FileTreeSection() {
         }}>
           <FolderOpen size={12} /> 文件
         </span>
-        <button
-          onClick={handleOpenFolder}
-          title="打开文件夹"
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 24, height: 24, borderRadius: 6,
-            color: "var(--text-secondary)", background: "transparent", cursor: "pointer",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
-          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        >
-          <FolderOpen size={13} />
-        </button>
+        <div style={{ display: "flex", gap: 2 }}>
+          <button
+            onClick={() => { setShowFileSearch(!showFileSearch); if (showFileSearch) setFileSearchQuery(""); }}
+            title="搜索文件"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 24, height: 24, borderRadius: 6,
+              color: showFileSearch ? "var(--accent)" : "var(--text-secondary)",
+              background: showFileSearch ? "var(--bg-hover)" : "transparent",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+            onMouseLeave={(e) => { if (!showFileSearch) e.currentTarget.style.background = "transparent"; }}
+          >
+            <Search size={12} />
+          </button>
+          <button
+            onClick={toggleShowHidden}
+            title={showHidden ? "隐藏以点开头的文件" : "显示隐藏文件"}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 24, height: 24, borderRadius: 6,
+              color: showHidden ? "var(--accent)" : "var(--text-secondary)",
+              background: showHidden ? "var(--bg-hover)" : "transparent",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+            onMouseLeave={(e) => { if (!showHidden) e.currentTarget.style.background = "transparent"; }}
+          >
+            {showHidden ? <Eye size={12} /> : <EyeOff size={12} />}
+          </button>
+          <button
+            onClick={handleOpenFolder}
+            title="打开文件夹"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 24, height: 24, borderRadius: 6,
+              color: "var(--text-secondary)", background: "transparent", cursor: "pointer",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-hover)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            <FolderOpen size={13} />
+          </button>
+        </div>
       </div>
+
+      {/* Search input */}
+      {showFileSearch && tree.length > 0 && (
+        <div style={{ padding: "4px 10px", flexShrink: 0 }}>
+          <input
+            value={fileSearchQuery}
+            onChange={(e) => setFileSearchQuery(e.target.value)}
+            placeholder="搜索文件或文件夹..."
+            autoFocus
+            style={{
+              width: "100%", padding: "4px 8px", fontSize: 12,
+              background: "var(--bg-primary)", border: "1px solid var(--border)",
+              borderRadius: 6, color: "var(--text-primary)", outline: "none",
+            }}
+          />
+        </div>
+      )}
 
       {/* Tree */}
       <div style={scrollContainerStyle}>
@@ -419,7 +494,16 @@ function FileTreeSection() {
             </button>
           </div>
         ) : (
-          tree.map((node) => renderNode(node))
+          filteredTree.length === 0 ? (
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "24px 12px", color: "var(--text-secondary)", fontSize: 12, opacity: 0.6,
+            }}>
+              没有匹配的文件
+            </div>
+          ) : (
+            filteredTree.map((node) => renderNode(node))
+          )
         )}
       </div>
 
@@ -428,6 +512,22 @@ function FileTreeSection() {
           x={fileContextMenu.x}
           y={fileContextMenu.y}
           items={[
+            {
+              label: fileContextMenu.node.isDir ? "清除文件夹隔离属性" : "清除隔离属性",
+              icon: <Shield size={14} />,
+              action: () => {
+                const node = fileContextMenu.node;
+                import("@tauri-apps/api/core").then(({ invoke }) => {
+                  invoke("remove_quarantine", { path: node.path, recursive: node.isDir })
+                    .then(() => {
+                      // 静默成功
+                    })
+                    .catch((err) => {
+                      window.alert("清除隔离属性失败：" + err);
+                    });
+                }).catch(() => {});
+              },
+            },
             {
               label: fileContextMenu.node.isDir ? "删除文件夹" : "删除文件",
               icon: <Trash2 size={14} />,
