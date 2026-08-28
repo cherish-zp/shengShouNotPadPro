@@ -19,10 +19,21 @@ NotePadPro 是一个轻量、跨编码、支持 Markdown 预览的**本地文本
 1. **验证**：`npm test` 全绿 + `npx tsc --noEmit` 无错 + `npx vite build` 成功；改动涉及 Rust 时额外 `cd src-tauri && cargo check` 通过。
 2. **提交 git**：`git add -A && git commit -m "<中文简述本次改动>"`。
 3. **打包**：`npx tauri build`（产出 `.app` / `.dmg`）。
-4. **安装到 mac**：`rm -rf /Applications/NotePadPro.app && cp -R src-tauri/target/release/bundle/macos/NotePadPro.app /Applications/ && xattr -dr com.apple.quarantine /Applications/NotePadPro.app && rm -rf src-tauri/target/release/bundle/macos/NotePadPro.app`（`xattr -dr` 移除隔离属性避免 Gatekeeper 警告，最后清理构建产物避免 Spotlight 搜到两个应用）。
+4. **安装到 mac**：
+   ```bash
+   pkill -9 "NotePadPro"; pkill -9 "novaedit"
+   rm -rf /Applications/NotePadPro.app
+   cp -R src-tauri/target/release/bundle/macos/NotePadPro.app /Applications/
+   xattr -dr com.apple.quarantine /Applications/NotePadPro.app
+   codesign --force --deep --sign - /Applications/NotePadPro.app
+   rm -rf src-tauri/target/release/bundle/macos/NotePadPro.app
+   open /Applications/NotePadPro.app
+   ```
+   （先杀旧进程；`xattr -dr` 移除隔离属性避免 Gatekeeper 警告；`codesign` 自签名保证可启动；清理构建产物避免 Spotlight 搜到两个应用；最后启动新版本等用户验证）。
 
 > 提交与安装会写入 `.git` 与 `/Applications`，需在沙箱外执行（提权）。
 > **每次改完代码都必须完整执行「打包（步骤 3）+ 安装（步骤 4）」并确认安装成功，不得省略，也不得仅作为可选项交给用户自行执行。**
+> **涉及交互/可视化的功能改动，安装后必须启动新版本，交给用户确认功能正常后，再执行 git 提交。**
 
 ## 编码规范
 - TypeScript + React 函数组件；样式用内联 `style` + CSS 变量（`var(--xxx)`），与现有代码保持一致。
