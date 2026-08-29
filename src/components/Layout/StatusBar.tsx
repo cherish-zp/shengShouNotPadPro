@@ -11,28 +11,40 @@ export default function StatusBar() {
   return (
     <div
       style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        height: 26, padding: "0 14px", fontSize: 11,
-        background: "var(--bg-secondary)", borderTop: "1px solid var(--border)",
-        color: "var(--text-secondary)", flexShrink: 0,
-        letterSpacing: "0.02em",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        height: 24,
+        padding: "0 14px",
+        fontSize: 11,
+        background: "var(--glass-bg)",
+        WebkitBackdropFilter: "var(--glass-blur)",
+        backdropFilter: "var(--glass-blur)",
+        borderTop: "0.5px solid var(--border)",
+        color: "var(--text-secondary)",
+        flexShrink: 0,
+        fontVariantNumeric: "tabular-nums",
+        zIndex: 10,
+        position: "relative",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {cursorPos && (
-          <span style={{ opacity: 0.8 }}>行 {cursorPos.line}, 列 {cursorPos.column}</span>
+          <span style={{ opacity: 0.7 }}>行 {cursorPos.line}</span>
         )}
-        {tab && <span style={{ opacity: 0.25 }}>|</span>}
-        {tab && <span style={{ opacity: 0.8 }}>{tab.content.split("\n").length} 行</span>}
-        {tab && <span style={{ opacity: 0.25 }}>|</span>}
-        {tab && <span style={{ opacity: 0.8 }}>{tab.content.length} 字符</span>}
+        {cursorPos && <span style={{ opacity: 0.3 }}>·</span>}
+        {cursorPos && (
+          <span style={{ opacity: 0.7 }}>列 {cursorPos.column}</span>
+        )}
+        {tab && <span style={{ opacity: 0.2 }}>·</span>}
+        {tab && <span style={{ opacity: 0.7 }}>{tab.content.split("\n").length} 行</span>}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        {tab && <span style={{ opacity: 0.7 }}>{getEncodingLabel(tab.encoding)}</span>}
-        {tab && <span style={{ opacity: 0.25 }}>|</span>}
-        {tab && <span style={{ opacity: 0.7 }}>{tab.lineEnding}</span>}
-        {tab && <span style={{ opacity: 0.25 }}>|</span>}
-        {tab && <span style={{ opacity: 0.7 }}>{tab.indentType === "tab" ? "制表符" : `${tab.indentSize} 空格`}</span>}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {tab && <span style={{ opacity: 0.6 }}>{getEncodingLabel(tab.encoding)}</span>}
+        {tab && <span style={{ opacity: 0.2 }}>·</span>}
+        {tab && <span style={{ opacity: 0.6 }}>{tab.lineEnding}</span>}
+        {tab && <span style={{ opacity: 0.2 }}>·</span>}
+        {tab && <span style={{ opacity: 0.6 }}>{tab.indentType === "tab" ? "Tab" : `${tab.indentSize} 空格`}</span>}
       </div>
     </div>
   );

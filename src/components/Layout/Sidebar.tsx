@@ -14,23 +14,30 @@ const VIEWS = [
 ];
 
 /**
- * 固定显示的左侧图标栏：始终可见（不受 sidebarVisible 影响）。
- * 点击图标会展开侧边栏内容面板并切换到对应视图，确保侧边栏不会被「弄丢」。
+ * 水晶侧边栏图标栏 — 毛玻璃底 + 精准对齐
  */
 export function SidebarRail() {
   const activeView = useEditorStore((s) => s.activeSidebarView);
   const openSidebarView = useEditorStore((s) => s.openSidebarView);
   const setSettingsOpen = useEditorStore((s) => s.setSettingsOpen);
 
-  const isActive = (id: string) => activeView === id || (activeView === "tabs" && id === "files");
+  const isActive = (id: string) =>
+    activeView === id || (activeView === "tabs" && id === "files");
 
   return (
     <div
       style={{
-        width: 48, display: "flex", flexDirection: "column", alignItems: "center",
-        padding: "10px 0", gap: 4,
-        borderRight: "1px solid var(--border)", flexShrink: 0,
-        background: "var(--bg-primary)",
+        width: 52,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "14px 0",
+        gap: 2,
+        borderRight: "0.5px solid var(--border)",
+        flexShrink: 0,
+        background: "var(--glass-bg)",
+        WebkitBackdropFilter: "var(--glass-blur)",
+        backdropFilter: "var(--glass-blur)",
       }}
     >
       {VIEWS.map(({ id, icon: Icon, label }) => {
@@ -41,52 +48,118 @@ export function SidebarRail() {
             onClick={() => openSidebarView(id)}
             title={label}
             style={{
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, borderRadius: 10,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 36,
+              height: 36,
+              borderRadius: 9,
               color: active ? "var(--accent)" : "var(--text-secondary)",
-              background: active ? "var(--selection)" : "transparent",
+              background: active ? "var(--accent-soft)" : "transparent",
               cursor: "pointer",
               transition: "all 180ms cubic-bezier(0.4, 0, 0.2, 1)",
-              boxShadow: active ? "var(--accent-glow)" : "none",
+              position: "relative",
             }}
-            onMouseEnter={(e) => { if (!active) { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; } }}
-            onMouseLeave={(e) => { if (!active) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-secondary)"; } }}
+            onMouseEnter={(e) => {
+              if (!active) {
+                e.currentTarget.style.background = "var(--bg-hover)";
+                e.currentTarget.style.color = "var(--text-primary)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!active) {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "var(--text-secondary)";
+              }
+            }}
           >
-            <Icon size={19} />
+            {active && (
+              <span
+                style={{
+                  position: "absolute",
+                  left: -8,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  width: 3,
+                  height: 18,
+                  borderRadius: 2,
+                  background: "var(--accent)",
+                }}
+              />
+            )}
+            <Icon size={18} strokeWidth={1.8} />
           </button>
         );
       })}
+
       <div style={{ flex: 1 }} />
+
+      <div
+        style={{
+          width: 32,
+          height: 0.5,
+          background: "var(--divider)",
+          marginBottom: 6,
+        }}
+      />
+
       <button
         onClick={() => setSettingsOpen(true)}
         title="设置"
         style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: 36, height: 36, borderRadius: 10,
-          color: "var(--text-secondary)", cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 36,
+          height: 36,
+          borderRadius: 9,
+          color: "var(--text-secondary)",
+          cursor: "pointer",
           transition: "all 180ms cubic-bezier(0.4, 0, 0.2, 1)",
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = "var(--bg-hover)"; e.currentTarget.style.color = "var(--text-primary)"; }}
-        onMouseLeave={(e) => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "var(--bg-hover)";
+          e.currentTarget.style.color = "var(--text-primary)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.color = "var(--text-secondary)";
+        }}
       >
-        <Settings size={19} />
+        <Settings size={18} strokeWidth={1.8} />
       </button>
     </div>
   );
 }
 
-/** 侧边栏内容面板：按当前视图渲染（仅在 sidebarVisible 时由 MainLayout 挂载） */
+/** 水晶侧边栏内容面板 */
 export function SidebarContent() {
   const activeView = useEditorStore((s) => s.activeSidebarView);
   const view = activeView === "tabs" ? "files" : activeView;
+
   return (
     <div
       style={{
-        flex: 1, overflow: "hidden", display: "flex", flexDirection: "column",
-        minWidth: 0, background: "var(--bg-primary)",
+        flex: 1,
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        minWidth: 0,
+        background: "var(--bg-primary)",
+        borderRight: "0.5px solid var(--border)",
       }}
     >
-      {view === "files" ? <FilePanel /> : view === "search" ? <GlobalSearch /> : view === "tools" ? <ToolsPanel /> : view === "plugins" ? <PluginPanel /> : <FilePanel />}
+      {view === "files" ? (
+        <FilePanel />
+      ) : view === "search" ? (
+        <GlobalSearch />
+      ) : view === "tools" ? (
+        <ToolsPanel />
+      ) : view === "plugins" ? (
+        <PluginPanel />
+      ) : (
+        <FilePanel />
+      )}
     </div>
   );
 }

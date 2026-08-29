@@ -70,9 +70,14 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
   return (
     <div
       style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "5px 14px",
-        background: "var(--bg-secondary)", borderBottom: "1px solid var(--border)",
+        display: "flex", alignItems: "center", gap: 10, padding: "6px 14px",
+        background: "var(--glass-bg)",
+        WebkitBackdropFilter: "var(--glass-blur)",
+        backdropFilter: "var(--glass-blur)",
+        borderBottom: "0.5px solid var(--border)",
         fontSize: 12, flexShrink: 0,
+        zIndex: 10,
+        position: "relative",
       }}
     >
       {/* 新建便签 */}

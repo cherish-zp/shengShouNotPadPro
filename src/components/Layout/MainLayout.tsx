@@ -45,8 +45,8 @@ export default function MainLayout() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", width: "100vw", height: "100vh", overflow: "hidden" }}>
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", width: "100vw", height: "100vh", overflow: "hidden", background: "var(--bg-primary)" }}>
+      <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}>
         {/* 固定左侧图标栏：始终可见 */}
         <SidebarRail />
 
@@ -55,9 +55,8 @@ export default function MainLayout() {
           <div
             style={{
               width: sidebarWidth, flexShrink: 0,
-              borderRight: "1px solid var(--border)",
               display: "flex", overflow: "hidden",
-              animation: "slideInLeft 200ms ease",
+              animation: "slideInLeft 250ms cubic-bezier(0.4, 0, 0.2, 1)",
             }}
           >
             <SidebarContent />
@@ -69,12 +68,13 @@ export default function MainLayout() {
           <div
             onMouseDown={handleMouseDown}
             style={{
-              width: 5, cursor: "col-resize", flexShrink: 0,
+              width: 4, cursor: "col-resize", flexShrink: 0,
               background: isResizing ? "var(--accent)" : "transparent",
-              transition: isResizing ? "none" : "background 0.25s ease",
-              borderRadius: 3,
+              transition: isResizing ? "none" : "background 0.2s ease",
+              borderRadius: 2,
+              zIndex: 20,
             }}
-            onMouseEnter={(e) => { if (!isResizing) e.currentTarget.style.background = "var(--bg-hover)"; }}
+            onMouseEnter={(e) => { if (!isResizing) e.currentTarget.style.background = "var(--border-strong)"; }}
             onMouseLeave={(e) => { if (!isResizing) e.currentTarget.style.background = "transparent"; }}
           />
         )}
