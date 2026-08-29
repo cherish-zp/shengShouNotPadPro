@@ -1,12 +1,28 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { renderMarkdown } from "@/utils/markdown";
+import { dirname } from "@/utils/imagePaste";
+import { resolvePreviewImagesAsync } from "@/utils/imageLoader";
 
 interface MarkdownPreviewProps {
   content: string;
+  /** 关联的文档路径；用于把图片相对路径解析为本地绝对路径 */
+  filePath?: string;
 }
 
-export default function MarkdownPreview({ content }: MarkdownPreviewProps) {
-  const html = useMemo(() => renderMarkdown(content), [content]);
+export default function MarkdownPreview({ content, filePath }: MarkdownPreviewProps) {
+  const [html, setHtml] = useState("");
+
+  useEffect(() => {
+    const raw = renderMarkdown(content);
+    const baseDir = filePath ? dirname(filePath) : null;
+    let cancelled = false;
+    resolvePreviewImagesAsync(raw, baseDir).then((out) => {
+      if (!cancelled) setHtml(out);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [content, filePath]);
 
   return (
     <div

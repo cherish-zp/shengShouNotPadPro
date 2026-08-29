@@ -32,7 +32,7 @@ export default function EditorContainer() {
     >
       <Upload size={36} />
       <div style={{ fontSize: 14, fontWeight: 600 }}>松开以打开文件</div>
-      <div style={{ fontSize: 12, opacity: 0.8 }}>拖入的文件将作为新便签打开</div>
+      <div style={{ fontSize: 12, opacity: 0.8 }}>图片将插入当前便签，其他文件作为便签打开</div>
     </div>
   ) : null;
 
@@ -82,7 +82,7 @@ export default function EditorContainer() {
   return (
     <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {showPreview && activeTab ? (
-        <MarkdownPreview content={activeTab.content} />
+        <MarkdownPreview content={activeTab.content} filePath={activeTab.filePath} />
       ) : (
         <CodeEditor tabId={activeTabId} />
       )}

@@ -144,6 +144,11 @@ export const useTabStore = create<TabStore>((set, get) => {
       }
 
       pset({ tabs: newTabs, activeTabId: newActiveId });
+
+      // 关闭草稿时清理其贴图暂存目录（火忘式，失败不影响关tab）
+      void import("@/utils/imageBridge")
+        .then((m) => m.cleanupTabStaging(id))
+        .catch(() => {});
     },
 
     renameTab: (id: string, name: string) => {

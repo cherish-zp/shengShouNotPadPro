@@ -261,6 +261,76 @@ pub fn read_file_bytes(path: String) -> Result<String, String> {
     Ok(BASE64.encode(&bytes))
 }
 
+/// 校验图片文件名：只允许纯文件名，防止目录穿越
+fn validate_image_file_name(name: &str) -> Result<(), String> {
+    if name.is_empty()
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains("..")
+    {
+        return Err(format!("Invalid image file name: {}", name));
+    }
+    Ok(())
+}
+
+/// 把前端传来的图片字节（base64）写入目标目录并返回完整路径。
+/// 目录不存在时自动创建（文档同目录 assets/ 或草稿暂存目录）。
+#[tauri::command]
+pub fn save_image_bytes(dir: String, name: String, data_base64: String) -> Result<String, String> {
+    validate_image_file_name(&name)?;
+    fs::create_dir_all(&dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+    let bytes = BASE64
+        .decode(data_base64.as_bytes())
+        .map_err(|e| format!("Failed to decode image data: {}", e))?;
+    let dest = Path::new(&dir).join(&name);
+    fs::write(&dest, &bytes).map_err(|e| format!("Failed to write image: {}", e))?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+/// 把已存在的图片文件复制到目标目录（拖拽图片进编辑器时使用），返回目标完整路径。
+#[tauri::command]
+pub fn copy_image_file(src: String, dest_dir: String, name: String) -> Result<String, String> {
+    validate_image_file_name(&name)?;
+    fs::create_dir_all(&dest_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+    let dest = Path::new(&dest_dir).join(&name);
+    fs::copy(&src, &dest).map_err(|e| format!("Failed to copy image: {}", e))?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+/// 递归创建目录（保存草稿迁移暂存图片前确保 assets/ 存在）
+#[tauri::command]
+pub fn ensure_dir(path: String) -> Result<(), String> {
+    fs::create_dir_all(&path).map_err(|e| format!("Failed to create directory: {}", e))?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_save_image_bytes_writes_and_returns_path() {
+        let dir = std::env::temp_dir().join(format!("novaedit-test-{}", std::process::id()));
+        let data_base64 = BASE64.encode(b"\x89PNG fake image bytes");
+        let path = save_image_bytes(
+            dir.to_string_lossy().to_string(),
+            "img-test.png".to_string(),
+            data_base64,
+        )
+        .expect("save_image_bytes should succeed");
+        assert_eq!(path, dir.join("img-test.png").to_string_lossy().to_string());
+        let written = fs::read(&path).expect("file should exist");
+        assert_eq!(written, b"\x89PNG fake image bytes");
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_save_image_bytes_rejects_path_traversal() {
+        assert!(save_image_bytes("/tmp".into(), "../evil.png".into(), "".into()).is_err());
+        assert!(save_image_bytes("/tmp".into(), "a/b.png".into(), "".into()).is_err());
+    }
+}
+
 /// 递归列出目录下所有文件（用于导入 Xshell 会话等场景）
 #[tauri::command]
 pub fn list_directory_recursive(path: String) -> Result<Vec<DirEntry>, String> {

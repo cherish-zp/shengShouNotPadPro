@@ -40,6 +40,9 @@ pub fn run() {
             commands::file_ops::add_recent_file,
             commands::file_ops::list_recent_files,
             commands::file_ops::remove_quarantine,
+            commands::file_ops::save_image_bytes,
+            commands::file_ops::copy_image_file,
+            commands::file_ops::ensure_dir,
         ])
         .build(tauri::generate_context!())
         .expect("error while building NotePadPro")

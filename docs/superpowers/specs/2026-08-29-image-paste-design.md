@@ -110,7 +110,7 @@ Cmd+V
 | `useFileDrop.ts` / App 层（修改） | 图片文件 drop 分流（`partitionDroppedPaths` 之后） | imagePaste、commands |
 | `MarkdownPreview.tsx`（修改） | img src resolve + convertFileSrc | imagePaste |
 | `useAutoSave.ts`（修改） | 抽 `persistTab`，保存前迁移暂存图 | imagePaste、commands |
-| `App.tsx` / `tabStore`（小改） | 启动时清空 staging 根目录；`closeTab` 时清理该 tab 的 staging 目录 | commands |
+| `tabStore.closeTab`（小改） | 关闭便签时清理该 tab 的 staging 目录（火忘式） | commands |
 | `src/utils/toast.ts`（新增，~30 行） | 极轻量 toast（全局单例，2.5s 消失），贴图失败/类型不支持提示 | 无 |
 | `tauri.conf.json`（一行） | 开启 assetProtocol | — |
 
@@ -124,7 +124,7 @@ Cmd+V
 | 写盘/建目录失败 | toast「图片保存失败」，不插入链接，文档不变 |
 | 代码文件（非 md/txt）贴图 | toast「当前文件类型不支持贴图」，无副作用 |
 | 保存迁移时某个图片移动失败 | toast 提示具体文件名，正文仍保存（保留原暂存绝对路径，链接不丢） |
-| 应用启动/关闭草稿 | 清理 staging 目录，孤儿图片不堆积 |
+| 应用关闭草稿 | 清理该草稿的 staging 目录，孤儿图片不堆积（不做启动时全量清空：草稿内容持久化在 localStorage，重启后仍引用暂存目录） |
 | 超大图片 | 不做限制（本地工具，YAGNI） |
 
 ## 6. 测试计划（TDD）

@@ -23,6 +23,9 @@ import { useTabStore } from "@/store/tabStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useEditorStore } from "@/store/editorStore";
 import { middleButtonRectSelection } from "@/utils/cm/rectSelection";
+import { inlineImages } from "@/utils/cm/imageWidgets";
+import { insertImageBytes } from "@/utils/imagePasteFlow";
+import { baseDirOfFilePath, isPasteSupported } from "@/utils/imagePaste";
 
 interface CodeEditorProps {
   tabId: string;
@@ -219,10 +222,50 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
             updateContent(tabId, viewRef.current.state.doc.toString());
           }
         },
+        // 剪贴板贴图：仅当剪贴板里有图片且没有可用文本时接管，否则放行默认粘贴
+        paste: (event, view) => {
+          const dt = (event as ClipboardEvent).clipboardData;
+          if (!dt) return false;
+          let imageFile: File | null = null;
+          let imageMime = "";
+          for (const item of Array.from(dt.items)) {
+            if (item.kind === "file" && item.type.startsWith("image/")) {
+              const f = item.getAsFile();
+              if (f) {
+                imageFile = f;
+                imageMime = item.type;
+                break;
+              }
+            }
+          }
+          if (!imageFile) return false;
+          if (dt.getData("text/plain").trim() !== "") return false;
+          const tabState = useTabStore.getState().tabs.find((t) => t.id === tabId);
+          if (!tabState) return false;
+          event.preventDefault();
+          void (async () => {
+            const bytes = new Uint8Array(await imageFile!.arrayBuffer());
+            await insertImageBytes(view, bytes, imageMime, {
+              tabId: tabState.id,
+              language: tabState.language,
+              filePath: tabState.filePath,
+            });
+          })();
+          return true;
+        },
       }),
       themeCompartment.of(makeTheme()),
       languageCompartment.of(getLanguageExtension(tab.language) || []),
       wordWrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
+      // Markdown/纯文本便签：把 ![](...) 渲染成内联图片
+      ...(isPasteSupported(tab.language)
+        ? [
+            inlineImages(() => {
+              const current = useTabStore.getState().tabs.find((t) => t.id === tabId);
+              return baseDirOfFilePath(current?.filePath);
+            }),
+          ]
+        : []),
     ];
 
     const state = EditorState.create({

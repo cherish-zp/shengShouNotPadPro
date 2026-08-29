@@ -5,6 +5,8 @@ import { detectLanguageFromExtension } from "@/utils/encoding";
 import { useEditorStore } from "@/store/editorStore";
 import { partitionDroppedPaths, type DroppedItem } from "@/utils/dropHandler";
 import { classifyFileExtension } from "@/utils/quarantine";
+import { isImageFilePath, imageMimeFromExt } from "@/utils/imagePaste";
+import { insertImageBytes, insertImageFile } from "@/utils/imagePasteFlow";
 
 interface UseFileDropOptions {
   /** 是否禁用拖放（如打开 Modal 时） */
@@ -63,6 +65,17 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
   // 通过浏览器 File 对象打开（开发模式 / 无文件路径）
   const openByFile = async (file: File) => {
     const ext = file.name.includes(".") ? file.name.split(".").pop() ?? "" : "";
+    // 浏览器拖入的图片走贴图路径（开发模式下无文件系统，会提示保存失败）
+    const mime = imageMimeFromExt(ext);
+    if (mime) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      await insertImageBytes(null, bytes, mime, {
+        tabId: useTabStore.getState().activeTabId ?? "",
+        language: useTabStore.getState().tabs.find((t) => t.id === useTabStore.getState().activeTabId)?.language ?? "plaintext",
+        filePath: useTabStore.getState().tabs.find((t) => t.id === useTabStore.getState().activeTabId)?.filePath,
+      });
+      return;
+    }
     const language = detectLanguageFromExtension(ext);
     try {
       const content = await file.text();
@@ -97,7 +110,12 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
       openSidebarView("files");
     }
     for (const f of files) {
-      void openByPath(f);
+      // 图片文件不作为文本打开（会乱码），而是复制进 assets/暂存目录并插入链接
+      if (isImageFilePath(f.split(/[\\/]/).pop() || f)) {
+        void insertImageFile(f);
+      } else {
+        void openByPath(f);
+      }
     }
   };
 
