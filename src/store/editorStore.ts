@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { EditorView } from "@codemirror/view";
 import { selectSidebarView } from "@/utils/sidebarState";
+import { dedupePaths, migrateOpenFolders } from "@/components/FileTree/fileTreeUtils";
 
 const PERSIST_KEY = "novaedit-editor-ui";
 
@@ -8,7 +9,9 @@ interface PersistedUI {
   sidebarVisible?: boolean;
   markdownPreviewVisible?: boolean;
   activeSidebarView?: EditorStore["activeSidebarView"];
+  /** @deprecated 旧版单目录字段，启动时迁移到 openFolders */
   openFolder?: string | null;
+  openFolders?: string[];
 }
 
 function loadPersisted(): PersistedUI {
@@ -60,13 +63,14 @@ interface EditorStore {
   setToolsPanelOpen: (open: boolean) => void;
   setActiveSidebarView: (view: EditorStore["activeSidebarView"]) => void;
   openSidebarView: (view: EditorStore["activeSidebarView"]) => void;
-  openFolder: string | null;
-  setOpenFolder: (path: string | null) => void;
+  openFolders: string[];
+  addOpenFolder: (path: string) => void;
+  removeOpenFolder: (path: string) => void;
   markdownPreviewVisible: boolean;
   toggleMarkdownPreview: () => void;
 }
 
-export const useEditorStore = create<EditorStore>((set) => ({
+export const useEditorStore = create<EditorStore>((set, get) => ({
   cursorPositions: {},
   scrollPositions: {},
   sidebarVisible: persisted.sidebarVisible ?? true,
@@ -77,7 +81,7 @@ export const useEditorStore = create<EditorStore>((set) => ({
   diffViewOpen: false,
   toolsPanelOpen: false,
   activeSidebarView: persisted.activeSidebarView ?? "tabs",
-  openFolder: persisted.openFolder ?? null,
+  openFolders: migrateOpenFolders(persisted),
   editorView: null,
   markdownPreviewVisible: persisted.markdownPreviewVisible ?? false,
 
@@ -121,8 +125,14 @@ export const useEditorStore = create<EditorStore>((set) => ({
     persist({ sidebarVisible: next.sidebarVisible, activeSidebarView: next.activeSidebarView });
     set(next);
   },
-  setOpenFolder: (path) => {
-    persist({ openFolder: path });
-    set({ openFolder: path });
+  addOpenFolder: (path) => {
+    const openFolders = dedupePaths(get().openFolders, [path]);
+    persist({ openFolders });
+    set({ openFolders });
+  },
+  removeOpenFolder: (path) => {
+    const openFolders = get().openFolders.filter((p) => p !== path);
+    persist({ openFolders });
+    set({ openFolders });
   },
 }));

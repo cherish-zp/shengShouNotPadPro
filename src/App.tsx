@@ -13,7 +13,7 @@ export default function App() {
   const theme = useSettingsStore((s) => s.theme);
   const hydrate = useTabStore((s) => s.hydrate);
   const addTab = useTabStore((s) => s.addTab);
-  const setOpenFolder = useEditorStore((s) => s.setOpenFolder);
+  const addOpenFolder = useEditorStore((s) => s.addOpenFolder);
   const openSidebarView = useEditorStore((s) => s.openSidebarView);
 
   useEffect(() => {
@@ -68,7 +68,8 @@ export default function App() {
           if (cancelled) return;
           const paths = event.payload;
           if (paths.length > 0) {
-            setOpenFolder(paths[0]);
+            // 从 Finder 打开的文件夹追加到工作区，不覆盖已打开目录
+            paths.forEach(addOpenFolder);
             openSidebarView("files");
           }
         });
@@ -83,7 +84,7 @@ export default function App() {
       if (unlistenFiles) unlistenFiles();
       if (unlistenFolders) unlistenFolders();
     };
-  }, [addTab, setOpenFolder, openSidebarView]);
+  }, [addTab, addOpenFolder, openSidebarView]);
 
   // Apply theme: 默认 :root 是浅色，dark / system(dark) 才加 .dark
   useEffect(() => {

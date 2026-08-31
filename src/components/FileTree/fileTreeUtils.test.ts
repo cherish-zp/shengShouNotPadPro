@@ -7,8 +7,13 @@ import {
   moveNodeInTree,
   buildMovedPath,
   buildFileTreeNodes,
+  buildFolderRoot,
+  dedupePaths,
+  syncFolderRoots,
+  migrateOpenFolders,
   isHiddenName,
   filterHiddenNodes,
+  filterHiddenPreservingRoot,
   filterTreeByQuery,
 } from "./fileTreeUtils";
 import type { FileTreeNode, Tab } from "@/types";
@@ -381,5 +386,127 @@ describe("filterTreeByQuery", () => {
     ];
     const result = filterTreeByQuery(tree, "foo");
     expect(result.map((n) => n.name)).toEqual(["foobar.txt", "bazfoo.md"]);
+  });
+});
+
+describe("buildFolderRoot", () => {
+  const entries = [
+    { name: "b.txt", path: "/docs/b.txt", is_dir: false },
+    { name: "sub", path: "/docs/sub", is_dir: true },
+    { name: "a.txt", path: "/docs/a.txt", is_dir: false },
+  ];
+
+  it("把打开的文件夹本身作为唯一根节点（而不是把子项平铺在顶层）", () => {
+    const tree = buildFolderRoot("/Users/me/Downloads", entries);
+    expect(tree).toHaveLength(1);
+    expect(tree[0]).toMatchObject({
+      name: "Downloads",
+      path: "/Users/me/Downloads",
+      isDir: true,
+      expanded: true,
+    });
+  });
+
+  it("根节点子级按原有规则排序（目录优先，名称次序）", () => {
+    const tree = buildFolderRoot("/docs", entries);
+    expect(tree[0].children?.map((c) => c.name)).toEqual(["sub", "a.txt", "b.txt"]);
+  });
+
+  it("子目录默认折叠，根节点默认展开", () => {
+    const tree = buildFolderRoot("/docs", entries);
+    expect(tree[0].children?.find((c) => c.name === "sub")?.expanded).toBe(false);
+    expect(tree[0].children?.find((c) => c.name === "a.txt")?.isDir).toBe(false);
+  });
+
+  it("空目录：根节点仍存在且无子项（区别于「未打开文件夹」状态）", () => {
+    const tree = buildFolderRoot("/empty", []);
+    expect(tree).toHaveLength(1);
+    expect(tree[0].children).toEqual([]);
+  });
+
+  it("根路径 / 时名称回退为 /", () => {
+    const tree = buildFolderRoot("/", entries);
+    expect(tree[0].name).toBe("/");
+  });
+});
+
+describe("filterHiddenPreservingRoot", () => {
+  it("用户打开的根目录即使名字以点开头也保留，子级正常过滤", () => {
+    const root = {
+      name: ".config", path: "/me/.config", isDir: true, expanded: true,
+      children: [
+        { name: ".git", path: "/me/.config/.git", isDir: true, children: [], expanded: false },
+        { name: "app.conf", path: "/me/.config/app.conf", isDir: false, children: undefined, expanded: false },
+      ],
+    };
+    const result = filterHiddenPreservingRoot([root]);
+    expect(result).toHaveLength(1);
+    expect(result[0].name).toBe(".config");
+    expect(result[0].children?.map((c) => c.name)).toEqual(["app.conf"]);
+  });
+
+  it("普通树结构与 filterHiddenNodes 行为一致", () => {
+    const tree = [
+      { name: ".hidden", path: "/r/.hidden", isDir: true, children: [], expanded: false },
+      { name: "a.txt", path: "/r/a.txt", isDir: false, children: undefined, expanded: false },
+    ];
+    expect(filterHiddenPreservingRoot(tree)).toEqual(filterHiddenNodes(tree));
+  });
+});
+
+describe("dedupePaths", () => {
+  it("追加新目录，跳过已存在的，保持原有顺序", () => {
+    expect(dedupePaths(["/a", "/b"], ["/b", "/c", "/a"])).toEqual(["/a", "/b", "/c"]);
+  });
+
+  it("existing 为空时全部追加", () => {
+    expect(dedupePaths([], ["/x", "/y"])).toEqual(["/x", "/y"]);
+  });
+
+  it("adding 为空时返回原列表", () => {
+    expect(dedupePaths(["/a"], [])).toEqual(["/a"]);
+  });
+});
+
+describe("syncFolderRoots", () => {
+  const rootA = { name: "a", path: "/a", isDir: true, children: [], expanded: true } as FileTreeNode;
+  const rootB = { name: "b", path: "/b", isDir: true, children: [], expanded: false } as FileTreeNode;
+
+  it("指出需要加载的新目录，保留仍在打开列表中的根节点", () => {
+    const { toLoad, next } = syncFolderRoots([rootA], ["/a", "/b"]);
+    expect(toLoad).toEqual(["/b"]);
+    expect(next).toEqual([rootA]);
+  });
+
+  it("已关闭的目录从树中移除", () => {
+    const { toLoad, next } = syncFolderRoots([rootA, rootB], ["/b"]);
+    expect(toLoad).toEqual([]);
+    expect(next).toEqual([rootB]);
+  });
+
+  it("空树时全部待加载，顺序与 openFolders 一致", () => {
+    const { toLoad, next } = syncFolderRoots([], ["/x", "/y"]);
+    expect(toLoad).toEqual(["/x", "/y"]);
+    expect(next).toEqual([]);
+  });
+
+  it("next 中根节点的展开状态与子级原样保留", () => {
+    const { next } = syncFolderRoots([rootA, rootB], ["/a"]);
+    expect(next[0]).toBe(rootA);
+  });
+});
+
+describe("migrateOpenFolders", () => {
+  it("旧版单目录 openFolder 迁移为数组", () => {
+    expect(migrateOpenFolders({ openFolder: "/legacy" })).toEqual(["/legacy"]);
+  });
+
+  it("新版 openFolders 字段优先", () => {
+    expect(migrateOpenFolders({ openFolder: "/legacy", openFolders: ["/a", "/b"] })).toEqual(["/a", "/b"]);
+  });
+
+  it("两者都缺失时返回空数组（未打开任何目录）", () => {
+    expect(migrateOpenFolders({})).toEqual([]);
+    expect(migrateOpenFolders({ openFolder: null })).toEqual([]);
   });
 });

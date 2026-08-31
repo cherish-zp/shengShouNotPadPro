@@ -26,7 +26,7 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
   const addTab = useTabStore((s) => s.addTab);
   const { readFile, detectEncoding } = useTauri();
   const [isDragging, setIsDragging] = useState(false);
-  const setOpenFolder = useEditorStore((s) => s.setOpenFolder);
+  const addOpenFolder = useEditorStore((s) => s.addOpenFolder);
   const openSidebarView = useEditorStore((s) => s.openSidebarView);
 
   // 通过文件路径打开（Tauri 环境）
@@ -106,7 +106,8 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
     }
     const { folders, files } = partitionDroppedPaths(items);
     if (folders.length > 0) {
-      setOpenFolder(folders[0]);
+      // 拖入文件夹追加为新的根目录，不覆盖已打开的目录
+      folders.forEach(addOpenFolder);
       openSidebarView("files");
     }
     for (const f of files) {

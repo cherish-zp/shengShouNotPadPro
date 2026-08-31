@@ -161,6 +161,78 @@ export function buildFileTreeNodes(
   }));
 }
 
+/**
+ * 多目录工作区：打开新目录是「追加」为新的根节点，而不是覆盖当前文件树。
+ * 各打开目录的根节点并列展示，各自可独立展开/折叠/移除。
+ */
+
+/** 追加目录并去重（保持顺序） */
+export function dedupePaths(existing: string[], adding: string[]): string[] {
+  const seen = new Set(existing);
+  const out = [...existing];
+  for (const p of adding) {
+    if (!seen.has(p)) {
+      seen.add(p);
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+export interface FolderRootSync {
+  /** 需要新加载的目录（当前树中没有的） */
+  toLoad: string[];
+  /** 同步后的树：仅保留仍在打开列表中的根节点，顺序与 folders 一致 */
+  next: FileTreeNode[];
+}
+
+/** 计算多根文件树的同步：保留仍打开的根节点（原样保留展开状态与子级），指出待加载目录 */
+export function syncFolderRoots(tree: FileTreeNode[], folders: string[]): FolderRootSync {
+  const byPath = new Map(tree.map((n) => [n.path, n]));
+  const toLoad: string[] = [];
+  const next: FileTreeNode[] = [];
+  const seen = new Set<string>();
+  for (const p of folders) {
+    if (seen.has(p)) continue;
+    seen.add(p);
+    const node = byPath.get(p);
+    if (node) next.push(node);
+    else toLoad.push(p);
+  }
+  return { toLoad, next };
+}
+
+/** 持久化迁移：旧版单 openFolder → openFolders 数组；新版字段优先 */
+export function migrateOpenFolders(
+  persisted: { openFolder?: string | null; openFolders?: string[] }
+): string[] {
+  if (Array.isArray(persisted.openFolders)) return persisted.openFolders;
+  if (persisted.openFolder) return [persisted.openFolder];
+  return [];
+}
+
+/**
+ * 把打开的文件夹本身作为树的唯一根节点，其子目录/文件作为根节点的子级展示
+ * （而不是把子项平铺在顶层）。根节点默认展开；空目录时根节点仍存在，
+ * 与「未打开文件夹」的空树状态区分开。
+ */
+export function buildFolderRoot(
+  folderPath: string,
+  entries: Array<{ name: string; path: string; is_dir: boolean }>
+): FileTreeNode[] {
+  const segments = folderPath.split("/").filter(Boolean);
+  const name = segments.length > 0 ? segments[segments.length - 1] : "/";
+  return [
+    {
+      name,
+      path: folderPath,
+      isDir: true,
+      children: buildFileTreeNodes(entries),
+      expanded: true,
+    },
+  ];
+}
+
 
 /**
  * Check whether a file or directory name is "hidden" (starts with a dot).
@@ -181,6 +253,18 @@ export function filterHiddenNodes(tree: FileTreeNode[]): FileTreeNode[] {
       ...node,
       children: node.children ? filterHiddenNodes(node.children) : node.children,
     }));
+}
+
+/**
+ * 隐藏文件过滤，但保留用户主动打开的根目录节点本身
+ * （根目录是用户显式选择的，即使名字以点开头也不该被过滤掉；
+ * 其子级仍按隐藏规则正常过滤）。
+ */
+export function filterHiddenPreservingRoot(tree: FileTreeNode[]): FileTreeNode[] {
+  if (tree.length === 1 && tree[0].isDir) {
+    return [{ ...tree[0], children: filterHiddenNodes(tree[0].children ?? []) }];
+  }
+  return filterHiddenNodes(tree);
 }
 
 /**

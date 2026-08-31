@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from "react";
-import { FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Search, StickyNote, Trash2, Eye, EyeOff, Shield } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Search, StickyNote, Trash2, Eye, EyeOff, Shield, FolderMinus } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useTabStore } from "@/store/tabStore";
 import TabItem from "@/components/TabBar/TabItem";
 import TabContextMenu from "@/components/TabBar/TabContextMenu";
 import ContextMenu from "@/components/Common/ContextMenu";
 import Modal from "@/components/Common/Modal";
-import { removeNodeByPath, findTabsForDeletion, buildTargetPath, isSameOrAncestorPath, moveNodeInTree, buildMovedPath, buildFileTreeNodes, filterHiddenNodes, filterTreeByQuery } from "./fileTreeUtils";
+import { removeNodeByPath, findTabsForDeletion, buildTargetPath, isSameOrAncestorPath, moveNodeInTree, buildMovedPath, buildFileTreeNodes, buildFolderRoot, filterHiddenPreservingRoot, filterTreeByQuery, syncFolderRoots } from "./fileTreeUtils";
 import { classifyFileExtension } from "@/utils/quarantine";
 import { scrollContainerStyle } from "./panelLayout";
 import type { TabColor, FileTreeNode } from "@/types";
@@ -171,14 +171,17 @@ function NotesSection() {
   );
 }
 
-/* ──────────── 文件树区域 ──────────── */
+/* ──────────── 文件树区域（多目录工作区：每个打开的目录是一个根节点） ──────────── */
 function FileTreeSection() {
-  const openFolder = useEditorStore((s) => s.openFolder);
-  const setOpenFolder = useEditorStore((s) => s.setOpenFolder);
+  const openFolders = useEditorStore((s) => s.openFolders);
+  const addOpenFolder = useEditorStore((s) => s.addOpenFolder);
+  const removeOpenFolder = useEditorStore((s) => s.removeOpenFolder);
   const addTab = useTabStore((s) => s.addTab);
   const tabs = useTabStore((s) => s.tabs);
   const closeTab = useTabStore((s) => s.closeTab);
   const [tree, setTree] = useState<TreeNode[]>([]);
+  const treeRef = useRef<TreeNode[]>([]);
+  treeRef.current = tree;
   const [fileContextMenu, setFileContextMenu] = useState<{ x: number; y: number; node: TreeNode } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<TreeNode | null>(null);
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
@@ -197,12 +200,13 @@ function FileTreeSection() {
     });
   };
 
-  const loadFolder = async (folderPath: string) => {
+  const loadRoot = async (folderPath: string): Promise<TreeNode | null> => {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const entries = await invoke<Array<{ name: string; path: string; is_dir: boolean }>>("list_directory", { path: folderPath });
-      setTree(buildFileTreeNodes(entries));
-    } catch { /* 文件夹可能已不存在，忽略 */ }
+      // 打开的文件夹本身作为根节点，子项收在其下展开
+      return buildFolderRoot(folderPath, entries)[0];
+    } catch { return null; /* 文件夹可能已不存在 */ }
   };
 
   const handleOpenFolder = async () => {
@@ -210,17 +214,29 @@ function FileTreeSection() {
       const { invoke } = await import("@tauri-apps/api/core");
       const path = await invoke<string | null>("open_folder_dialog");
       if (path) {
-        setOpenFolder(path); // openFolder 变化会触发下方 useEffect 重新加载文件树
+        addOpenFolder(path); // openFolders 变化会触发下方同步 effect 追加根节点
       }
     } catch { /* Dev mode fallback */ }
   };
 
-  // openFolder 变化（打开文件夹 / 拖入文件夹 / 启动恢复）时重新加载文件树
+  // openFolders 变化（打开/拖入/移除目录 / 启动恢复）时同步根节点：
+  // 追加新目录的根节点，移除已关闭目录的根节点；已有根节点的展开状态原样保留
   useEffect(() => {
-    if (!openFolder) return;
-    void loadFolder(openFolder);
-    // 仅依赖 openFolder，避免每次渲染重复加载
-  }, [openFolder]);
+    let cancelled = false;
+    setTree((prev) => syncFolderRoots(prev, openFolders).next);
+    const { toLoad } = syncFolderRoots(treeRef.current, openFolders);
+    const loadMissing = async () => {
+      for (const p of toLoad) {
+        const root = await loadRoot(p);
+        if (cancelled || !root) continue;
+        setTree((prev) => (prev.some((r) => r.path === root.path) ? prev : [...prev, root]));
+      }
+    };
+    void loadMissing();
+    return () => { cancelled = true; };
+    // 仅依赖 openFolders，避免每次渲染重复同步
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openFolders]);
 
   const toggleNode = async (node: TreeNode) => {
     if (!node.isDir) {
@@ -279,6 +295,8 @@ function FileTreeSection() {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("delete_file", { path: target.path });
       setTree((prev) => removeNodeByPath(prev, target.path));
+      // 删除的是打开的根目录时，同步从工作区移除，避免下次同步又加载回来
+      if (openFolders.includes(target.path)) removeOpenFolder(target.path);
       findTabsForDeletion(tabs, target.path, target.isDir).forEach((t) => closeTab(t.id));
     } catch (err) {
       window.alert(`删除失败：${err}`);
@@ -393,7 +411,7 @@ function FileTreeSection() {
 
   const filteredTree = (() => {
     let result = tree;
-    if (!showHidden) result = filterHiddenNodes(result);
+    if (!showHidden) result = filterHiddenPreservingRoot(result);
     if (fileSearchQuery) result = filterTreeByQuery(result, fileSearchQuery);
     return result;
   })();
@@ -515,6 +533,13 @@ function FileTreeSection() {
           x={fileContextMenu.x}
           y={fileContextMenu.y}
           items={[
+            ...(openFolders.includes(fileContextMenu.node.path)
+              ? [{
+                  label: "从文件面板移除（不删除磁盘文件）",
+                  icon: <FolderMinus size={14} />,
+                  action: () => removeOpenFolder(fileContextMenu.node.path),
+                }]
+              : []),
             {
               label: fileContextMenu.node.isDir ? "清除文件夹隔离属性" : "清除隔离属性",
               icon: <Shield size={14} />,
