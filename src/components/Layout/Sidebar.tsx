@@ -1,17 +1,19 @@
 import React from "react";
-import { FileText, Search, Wrench, Puzzle, Settings } from "lucide-react";
+import { Search, Wrench, Puzzle, Settings, StickyNote, FolderOpen } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
-import FilePanel from "@/components/FileTree/FilePanel";
+import { RAIL_VIEWS, resolvePanelView, type RailViewId } from "@/utils/sidebarState";
+import NotesPanel, { FileTreePanel } from "@/components/FileTree/FilePanel";
 import GlobalSearch from "@/components/Search/GlobalSearch";
 import ToolsPanel from "@/components/Tools/ToolsPanel";
 import PluginPanel from "@/components/PluginManager/PluginPanel";
 
-const VIEWS = [
-  { id: "files" as const, icon: FileText, label: "文件" },
-  { id: "search" as const, icon: Search, label: "搜索" },
-  { id: "tools" as const, icon: Wrench, label: "工具" },
-  { id: "plugins" as const, icon: Puzzle, label: "插件" },
-];
+const RAIL_ICONS: Record<RailViewId, typeof StickyNote> = {
+  tabs: StickyNote,
+  files: FolderOpen,
+  search: Search,
+  tools: Wrench,
+  plugins: Puzzle,
+};
 
 /**
  * 水晶侧边栏图标栏 — 毛玻璃底 + 精准对齐
@@ -21,8 +23,7 @@ export function SidebarRail() {
   const openSidebarView = useEditorStore((s) => s.openSidebarView);
   const setSettingsOpen = useEditorStore((s) => s.setSettingsOpen);
 
-  const isActive = (id: string) =>
-    activeView === id || (activeView === "tabs" && id === "files");
+  const isActive = (id: RailViewId) => activeView === id;
 
   return (
     <div
@@ -40,7 +41,8 @@ export function SidebarRail() {
         backdropFilter: "var(--glass-blur)",
       }}
     >
-      {VIEWS.map(({ id, icon: Icon, label }) => {
+      {RAIL_VIEWS.map(({ id, label }) => {
+        const Icon = RAIL_ICONS[id];
         const active = isActive(id);
         return (
           <button
@@ -134,8 +136,7 @@ export function SidebarRail() {
 
 /** 水晶侧边栏内容面板 */
 export function SidebarContent() {
-  const activeView = useEditorStore((s) => s.activeSidebarView);
-  const view = activeView === "tabs" ? "files" : activeView;
+  const panel = resolvePanelView(useEditorStore((s) => s.activeSidebarView));
 
   return (
     <div
@@ -149,16 +150,16 @@ export function SidebarContent() {
         borderRight: "0.5px solid var(--border)",
       }}
     >
-      {view === "files" ? (
-        <FilePanel />
-      ) : view === "search" ? (
+      {panel === "notes" ? (
+        <NotesPanel />
+      ) : panel === "tree" ? (
+        <FileTreePanel />
+      ) : panel === "search" ? (
         <GlobalSearch />
-      ) : view === "tools" ? (
+      ) : panel === "tools" ? (
         <ToolsPanel />
-      ) : view === "plugins" ? (
-        <PluginPanel />
       ) : (
-        <FilePanel />
+        <PluginPanel />
       )}
     </div>
   );

@@ -13,14 +13,17 @@ import type { TabColor, FileTreeNode } from "@/types";
 
 type TreeNode = FileTreeNode;
 
-export default function FilePanel() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <NotesSection />
-      <div style={{ height: 1, background: "var(--border)", flexShrink: 0 }} />
-      <FileTreeSection />
-    </div>
-  );
+/**
+ * 侧边栏内容面板：便签列表与文件树是两个独立面板（SidebarRail 分别有入口），
+ * 不再上下叠放。导出 NotesPanel / FileTreePanel 供 SidebarContent 按 activeSidebarView 渲染。
+ */
+
+export default function NotesPanel() {
+  return <NotesSection />;
+}
+
+export function FileTreePanel() {
+  return <FileTreeSection />;
 }
 
 /* ──────────── 便签区域 ──────────── */
@@ -44,7 +47,7 @@ function NotesSection() {
     : tabs;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 120, flex: "0 1 50%" }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {/* Header */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -396,7 +399,7 @@ function FileTreeSection() {
   })();
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 80, flex: "0 1 50%" }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       {/* Header */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
