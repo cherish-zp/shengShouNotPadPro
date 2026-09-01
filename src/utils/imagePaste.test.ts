@@ -21,6 +21,7 @@ import {
   findImageRanges,
   dataUrlFromBase64,
   collectLocalImagePaths,
+  buildImageContextMenu,
   baseDirOfFilePath,
 } from "./imagePaste";
 
@@ -223,6 +224,29 @@ describe("baseDirOfFilePath", () => {
     expect(baseDirOfFilePath(undefined)).toBeNull();
     expect(baseDirOfFilePath(null)).toBeNull();
     expect(baseDirOfFilePath("")).toBeNull();
+  });
+});
+
+describe("buildImageContextMenu", () => {
+  it("本地图片：解析绝对路径，支持在 Finder 中显示", () => {
+    expect(buildImageContextMenu("assets/a.png", "/docs")).toEqual({
+      path: "/docs/assets/a.png",
+      canReveal: true,
+    });
+  });
+
+  it("外链：路径为原始 URL，不支持 Finder 显示", () => {
+    expect(buildImageContextMenu("https://x.com/a.png", null)).toEqual({
+      path: "https://x.com/a.png",
+      canReveal: false,
+    });
+  });
+
+  it("无法解析（相对链接且无基准目录）：path 为 null 且无动作", () => {
+    expect(buildImageContextMenu("assets/a.png", null)).toEqual({
+      path: null,
+      canReveal: false,
+    });
   });
 });
 

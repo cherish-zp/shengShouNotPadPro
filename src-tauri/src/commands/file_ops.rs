@@ -329,6 +329,23 @@ mod tests {
         assert!(save_image_bytes("/tmp".into(), "../evil.png".into(), "".into()).is_err());
         assert!(save_image_bytes("/tmp".into(), "a/b.png".into(), "".into()).is_err());
     }
+
+    /// 显示链路守护：read_file_bytes 的 base64 输出必须能无损还原原始字节。
+    /// 图片「颜色不对」排查时确认存储/读取管线不丢字节（渲染端色彩问题与字节无关）。
+    #[test]
+    fn test_read_file_bytes_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("novaedit-read-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("create temp dir");
+        let file = dir.join("img.png");
+        let data: &[u8] = b"\x89PNG\r\n\x1a\n fake \xff\x00\x7f bytes";
+        fs::write(&file, data).expect("write temp file");
+        let encoded = read_file_bytes(file.to_string_lossy().to_string()).expect("read_file_bytes");
+        assert_eq!(
+            BASE64.decode(encoded.as_bytes()).expect("valid base64"),
+            data.to_vec()
+        );
+        fs::remove_dir_all(&dir).ok();
+    }
 }
 
 /// 递归列出目录下所有文件（用于导入 Xshell 会话等场景）

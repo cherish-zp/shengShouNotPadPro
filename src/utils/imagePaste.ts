@@ -289,6 +289,21 @@ export function dataUrlFromBase64(base64: string, mime: string): string {
   return `data:${mime};base64,${base64}`;
 }
 
+export interface ImageContextMenu {
+  /** 右键菜单展示/复制的路径（本地绝对路径或外链 URL）；无法解析时为 null */
+  path: string | null;
+  /** 是否可「在 Finder 中显示」（仅本地文件） */
+  canReveal: boolean;
+}
+
+/** 图片右键菜单内容：展示解析后的真实路径；点击图片本体不再切换成源码，查看路径走这里 */
+export function buildImageContextMenu(link: string, baseDir: string | null): ImageContextMenu {
+  const resolution = resolveImageDisplaySrc(link, baseDir);
+  if (resolution.kind === "local") return { path: resolution.path, canReveal: true };
+  if (resolution.kind === "external") return { path: resolution.src, canReveal: false };
+  return { path: null, canReveal: false };
+}
+
 /**
  * 内联图片的基准目录：文档所在目录；草稿（无路径）返回 null。
  * 注意必须传目录而不是文件路径，否则相对链接会拼进 .txt 文件里（ENOTDIR）。
