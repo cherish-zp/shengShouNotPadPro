@@ -7,7 +7,10 @@ import TabContextMenu from "@/components/TabBar/TabContextMenu";
 import ContextMenu from "@/components/Common/ContextMenu";
 import Modal from "@/components/Common/Modal";
 import { removeNodeByPath, findTabsForDeletion, buildTargetPath, isSameOrAncestorPath, moveNodeInTree, buildMovedPath, buildFileTreeNodes, buildFolderRoot, filterHiddenPreservingRoot, filterTreeByQuery, syncFolderRoots } from "./fileTreeUtils";
+import { FILE_RENAMED_EVENT, renameTabPersisted } from "@/utils/tabRename";
 import { classifyFileExtension } from "@/utils/quarantine";
+import { toast } from "@/utils/toast";
+import { fileSizeLimitMessage, getFileSizeBytes, isFileSizeOverLimit } from "@/utils/fileSize";
 import { scrollContainerStyle } from "./panelLayout";
 import type { TabColor, FileTreeNode } from "@/types";
 
@@ -33,7 +36,6 @@ function NotesSection() {
   const addTab = useTabStore((s) => s.addTab);
   const closeTab = useTabStore((s) => s.closeTab);
   const setActiveTab = useTabStore((s) => s.setActiveTab);
-  const renameTab = useTabStore((s) => s.renameTab);
   const setTabColor = useTabStore((s) => s.setTabColor);
   const closeOthers = useTabStore((s) => s.closeOthers);
   const closeAll = useTabStore((s) => s.closeAll);
@@ -127,7 +129,10 @@ function NotesSection() {
               isActive={tab.id === activeTabId}
               onSelect={() => setActiveTab(tab.id)}
               onClose={() => closeTab(tab.id)}
-              onRename={(name) => renameTab(tab.id, name)}
+              onRename={(name) => {
+                // 关联磁盘文件的便签：磁盘文件一并重命名；失败提示且不改显示名
+                renameTabPersisted(tab, name).catch((err) => window.alert(`重命名失败：${err}`));
+              }}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
@@ -238,10 +243,28 @@ function FileTreeSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openFolders]);
 
+  // 便签重命名磁盘文件后，刷新文件所在的目录，避免文件树显示旧文件名
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const dir = (e as CustomEvent).detail?.dir;
+      if (typeof dir === "string") void refreshDir(dir);
+    };
+    window.addEventListener(FILE_RENAMED_EVENT, handler);
+    return () => window.removeEventListener(FILE_RENAMED_EVENT, handler);
+    // refreshDir 通过函数式 setTree 更新状态，此处仅需绑定一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const toggleNode = async (node: TreeNode) => {
     if (!node.isDir) {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
+        // 打开前检查文件大小，超限则提示并阻止读取内容
+        const sizeBytes = await getFileSizeBytes(node.path);
+        if (sizeBytes !== null && isFileSizeOverLimit(sizeBytes)) {
+          toast(fileSizeLimitMessage(sizeBytes), { type: "error" });
+          return;
+        }
         // 打开前先移除 macOS 隔离属性，避免下载的文件弹出安全警告
         const safety = classifyFileExtension(node.name);
         if (safety !== "caution") {

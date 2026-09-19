@@ -211,6 +211,31 @@ export function migrateOpenFolders(
   return [];
 }
 
+export interface RenameTarget {
+  /** 磁盘重命名的目标完整路径（同目录下换名字） */
+  newPath: string;
+  /** 被重命名文件所在的目录（重命名成功后刷新文件树该目录用） */
+  dir: string;
+}
+
+/**
+ * 便签重命名 → 磁盘重命名目标。
+ * 返回 null 表示无需磁盘操作：草稿便签（无 filePath，仅改显示名）、
+ * 新名称为空/纯空白、或与当前名称相同。
+ */
+export function buildRenameTarget(
+  filePath: string | undefined,
+  newName: string
+): RenameTarget | null {
+  const name = newName.trim();
+  if (!filePath || !name) return null;
+  const slash = filePath.lastIndexOf("/");
+  const dir = slash > 0 ? filePath.slice(0, slash) : "/";
+  const oldName = filePath.slice(slash + 1);
+  if (name === oldName) return null;
+  return { newPath: `${dir}/${name}`, dir };
+}
+
 /**
  * 把打开的文件夹本身作为树的唯一根节点，其子目录/文件作为根节点的子级展示
  * （而不是把子项平铺在顶层）。根节点默认展开；空目录时根节点仍存在，

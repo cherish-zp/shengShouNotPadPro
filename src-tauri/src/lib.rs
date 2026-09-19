@@ -16,6 +16,7 @@ pub fn run() {
             commands::file_ops::read_file,
             commands::file_ops::write_file,
             commands::file_ops::get_file_info,
+            commands::file_ops::get_file_size,
             commands::file_ops::list_directory,
             commands::file_ops::read_file_bytes,
             commands::file_ops::list_directory_recursive,

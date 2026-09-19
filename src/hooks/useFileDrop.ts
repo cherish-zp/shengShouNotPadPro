@@ -7,6 +7,8 @@ import { partitionDroppedPaths, type DroppedItem } from "@/utils/dropHandler";
 import { classifyFileExtension } from "@/utils/quarantine";
 import { isImageFilePath, imageMimeFromExt } from "@/utils/imagePaste";
 import { insertImageBytes, insertImageFile } from "@/utils/imagePasteFlow";
+import { toast } from "@/utils/toast";
+import { fileSizeLimitMessage, getFileSizeBytes, isFileSizeOverLimit } from "@/utils/fileSize";
 
 interface UseFileDropOptions {
   /** 是否禁用拖放（如打开 Modal 时） */
@@ -36,6 +38,12 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
     const language = detectLanguageFromExtension(ext);
     const safety = classifyFileExtension(name);
     try {
+      // 超过大小上限的文件直接拦截，不读内容也不建标签页
+      const sizeBytes = await getFileSizeBytes(path);
+      if (sizeBytes !== null && isFileSizeOverLimit(sizeBytes)) {
+        toast(fileSizeLimitMessage(sizeBytes), { type: "error" });
+        return;
+      }
       // 拖入文件时先清除 macOS 隔离属性，避免之后从 Finder 打开弹警告
       if (safety !== "caution") {
         import("@tauri-apps/api/core").then(({ invoke }) => {
@@ -78,6 +86,11 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
     }
     const language = detectLanguageFromExtension(ext);
     try {
+      // 浏览器 File 对象可直接取到大小，超限则提示并阻止读取
+      if (isFileSizeOverLimit(file.size)) {
+        toast(fileSizeLimitMessage(file.size), { type: "error" });
+        return;
+      }
       const content = await file.text();
       addTab({
         name: file.name,

@@ -172,6 +172,12 @@ pub fn get_file_info(path: String) -> Result<FileInfo, String> {
 }
 
 #[tauri::command]
+pub fn get_file_size(path: String) -> Result<u64, String> {
+    let metadata = fs::metadata(&path).map_err(|e| format!("Failed to get file size: {}", e))?;
+    Ok(metadata.len())
+}
+
+#[tauri::command]
 pub fn list_directory(path: String) -> Result<Vec<DirEntry>, String> {
     let entries =
         fs::read_dir(&path).map_err(|e| format!("Failed to read directory: {}", e))?;
@@ -345,6 +351,25 @@ mod tests {
             data.to_vec()
         );
         fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_get_file_size_returns_metadata_length() {
+        let dir = std::env::temp_dir().join(format!("novaedit-size-{}", std::process::id()));
+        fs::create_dir_all(&dir).expect("create temp dir");
+        let file = dir.join("size-test.txt");
+        let data = b"0123456789";
+        fs::write(&file, data).expect("write temp file");
+        let size = get_file_size(file.to_string_lossy().to_string()).expect("get_file_size");
+        assert_eq!(size, data.len() as u64);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn test_get_file_size_rejects_nonexistent_path() {
+        let dir = std::env::temp_dir().join(format!("novaedit-size-missing-{}", std::process::id()));
+        let missing = dir.join("missing.txt");
+        assert!(get_file_size(missing.to_string_lossy().to_string()).is_err());
     }
 }
 

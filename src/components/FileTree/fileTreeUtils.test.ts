@@ -11,6 +11,7 @@ import {
   dedupePaths,
   syncFolderRoots,
   migrateOpenFolders,
+  buildRenameTarget,
   isHiddenName,
   filterHiddenNodes,
   filterHiddenPreservingRoot,
@@ -508,5 +509,32 @@ describe("migrateOpenFolders", () => {
   it("两者都缺失时返回空数组（未打开任何目录）", () => {
     expect(migrateOpenFolders({})).toEqual([]);
     expect(migrateOpenFolders({ openFolder: null })).toEqual([]);
+  });
+});
+
+describe("buildRenameTarget", () => {
+  it("同一目录下生成新路径，并给出所在目录（重命名后刷新文件树用）", () => {
+    expect(buildRenameTarget("/docs/IDC用户抽取标准化", "IDC用户抽取标准化1.txt")).toEqual({
+      newPath: "/docs/IDC用户抽取标准化1.txt",
+      dir: "/docs",
+    });
+  });
+
+  it("嵌套目录同样处理", () => {
+    expect(buildRenameTarget("/a/b/c.md", "d.md")).toEqual({ newPath: "/a/b/d.md", dir: "/a/b" });
+  });
+
+  it("无文件路径的草稿便签返回 null（仅改显示名）", () => {
+    expect(buildRenameTarget(undefined, "new-name")).toBeNull();
+    expect(buildRenameTarget("", "new-name")).toBeNull();
+  });
+
+  it("新名称为空或纯空白返回 null", () => {
+    expect(buildRenameTarget("/docs/a.txt", "")).toBeNull();
+    expect(buildRenameTarget("/docs/a.txt", "   ")).toBeNull();
+  });
+
+  it("新名称与当前名称相同返回 null（无需磁盘操作）", () => {
+    expect(buildRenameTarget("/docs/a.txt", "a.txt")).toBeNull();
   });
 });

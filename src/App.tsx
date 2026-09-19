@@ -7,6 +7,8 @@ import { useTabStore } from "@/store/tabStore";
 import { useEditorStore } from "@/store/editorStore";
 import { detectLanguageFromExtension } from "@/utils/encoding";
 import { classifyFileExtension } from "@/utils/quarantine";
+import { toast } from "@/utils/toast";
+import { fileSizeLimitMessage, getFileSizeBytes, isFileSizeOverLimit } from "@/utils/fileSize";
 
 export default function App() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -42,6 +44,12 @@ export default function App() {
             const language = detectLanguageFromExtension(ext);
             const safety = classifyFileExtension(name);
             try {
+              // 超过大小上限的文件直接拦截，避免整读进内存
+              const sizeBytes = await getFileSizeBytes(path);
+              if (sizeBytes !== null && isFileSizeOverLimit(sizeBytes)) {
+                toast(fileSizeLimitMessage(sizeBytes), { type: "error" });
+                continue;
+              }
               // 清除隔离属性（虽然应用启动时已清一次，但文件可能是新的）
               if (safety !== "caution") {
                 invoke("remove_quarantine", { path, recursive: false }).catch(() => {});

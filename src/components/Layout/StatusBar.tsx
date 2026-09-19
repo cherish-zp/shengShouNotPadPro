@@ -2,11 +2,25 @@ import React from "react";
 import { useTabStore } from "@/store/tabStore";
 import { useEditorStore } from "@/store/editorStore";
 import { getEncodingLabel } from "@/utils/encoding";
+import {
+  formatFileSize,
+  formatFileSizeTooltip,
+} from "@/utils/fileSize";
+import { useFileSize } from "@/hooks/useFileSize";
 
 export default function StatusBar() {
   const activeTabId = useTabStore((s) => s.activeTabId);
   const tab = useTabStore((s) => s.tabs.find((t) => t.id === activeTabId));
   const cursorPos = useEditorStore((s) => s.cursorPositions[activeTabId || ""]);
+
+  // tab id / 路径 / dirty 状态任一变化时重新获取文件大小
+  // （保存、重置、重命名、另存/打开都会改变这些字段）
+  const size = useFileSize(
+    tab?.filePath,
+    `${tab?.id ?? ""}:${tab?.filePath ?? ""}:${tab?.dirty ? 1 : 0}`
+  );
+  const sizeLabel = formatFileSize(size);
+  const sizeTooltip = formatFileSizeTooltip(size);
 
   return (
     <div
@@ -40,6 +54,15 @@ export default function StatusBar() {
         {tab && <span style={{ opacity: 0.7 }}>{tab.content.split("\n").length} 行</span>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {tab?.filePath && sizeLabel && (
+          <span
+            style={{ opacity: 0.6 }}
+            title={sizeTooltip ?? undefined}
+          >
+            {sizeLabel}
+          </span>
+        )}
+        {tab?.filePath && sizeLabel && <span style={{ opacity: 0.2 }}>·</span>}
         {tab && <span style={{ opacity: 0.6 }}>{getEncodingLabel(tab.encoding)}</span>}
         {tab && <span style={{ opacity: 0.2 }}>·</span>}
         {tab && <span style={{ opacity: 0.6 }}>{tab.lineEnding}</span>}
