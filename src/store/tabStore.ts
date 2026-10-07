@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Tab, TabColor } from "@/types";
+import { moveTab, normalizeTabOrder, pinTab, unpinTab } from "@/utils/tabOrder";
 
 const STORAGE_KEY = "novaedit-tabs";
 
@@ -51,6 +52,7 @@ interface TabStore {
   setTabLineEnding: (id: string, lineEnding: "LF" | "CRLF") => void;
   setTabIndent: (id: string, size: number, type: "spaces" | "tab") => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
+  togglePinTab: (id: string) => void;
   closeOthers: (id: string) => void;
   closeAll: () => void;
   closeTabsToRight: (id: string) => void;
@@ -85,7 +87,8 @@ export const useTabStore = create<TabStore>((set, get) => {
       const stored = loadFromStorage();
       if (stored && stored.tabs && stored.tabs.length > 0) {
         set({
-          tabs: stored.tabs,
+          // 整理为「置顶区在前」的不变量顺序，兼容旧数据与外部改动
+          tabs: normalizeTabOrder(stored.tabs),
           activeTabId: stored.activeTabId,
           nextTabNum: stored.nextTabNum || 1,
           hydrated: true,
@@ -216,10 +219,16 @@ export const useTabStore = create<TabStore>((set, get) => {
     },
 
     reorderTabs: (fromIndex: number, toIndex: number) => {
-      const newTabs = [...get().tabs];
-      const [removed] = newTabs.splice(fromIndex, 1);
-      newTabs.splice(toIndex, 0, removed);
-      pset({ tabs: newTabs });
+      // moveTab 内含「禁止跨置顶区/普通区」的钳制
+      pset({ tabs: moveTab(get().tabs, fromIndex, toIndex) });
+    },
+
+    togglePinTab: (id: string) => {
+      const tabs = get().tabs;
+      const next = tabs.find((t) => t.id === id)?.pinned
+        ? unpinTab(tabs, id)
+        : pinTab(tabs, id, Date.now());
+      pset({ tabs: next });
     },
 
     closeOthers: (id: string) => {

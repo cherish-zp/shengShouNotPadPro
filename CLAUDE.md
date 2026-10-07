@@ -1,9 +1,11 @@
-# AGENTS.md — NotePadPro 项目规范
+# AGENTS.md — 圣手编辑器项目规范
 
 ## 项目简介
-NotePadPro 是一个轻量、跨编码、支持 Markdown 预览的**本地文本编辑器**（便签 / 代码编辑）。
+圣手编辑器（「圣手」系列本地工具之一，与圣手码头、圣手捕影同系列；仓库目录仍为 nodepad）是一个轻量、跨编码、支持 Markdown 预览的**本地文本编辑器**（便签 / 代码编辑）。
 技术栈：Tauri 2 + React 18 + TypeScript + zustand + CodeMirror 6 + Tailwind。
 **定位：纯本地文本编辑器。不包含远程连接（SSH）、终端、Xshell、Gitee 同步等功能，不要再引入。**
+
+品牌分层（与圣手码头一致）：用户可见名「圣手编辑器」；包内可执行名 `ShengShouBianJiQi`；identifier `com.cherish.shengshoubianjiqi`；Rust 内部包名 `novaedit` 保持不动。
 
 ## 常用命令
 - 安装依赖：`npm install`
@@ -21,15 +23,15 @@ NotePadPro 是一个轻量、跨编码、支持 Markdown 预览的**本地文本
 3. **打包**：`npx tauri build`（产出 `.app` / `.dmg`）。
 4. **安装到 mac**：
    ```bash
-   pkill -9 "NotePadPro"; pkill -9 "novaedit"
-   rm -rf /Applications/NotePadPro.app
-   cp -R src-tauri/target/release/bundle/macos/NotePadPro.app /Applications/
-   xattr -dr com.apple.quarantine /Applications/NotePadPro.app
-   codesign --force --deep --sign - /Applications/NotePadPro.app
-   rm -rf src-tauri/target/release/bundle/macos/NotePadPro.app
-   open /Applications/NotePadPro.app
+   pkill -9 "ShengShouBianJiQi"; pkill -9 "NotePadPro"; pkill -9 "novaedit"
+   rm -rf "/Applications/圣手编辑器.app" /Applications/NotePadPro.app
+   cp -R "src-tauri/target/release/bundle/macos/圣手编辑器.app" /Applications/
+   xattr -dr com.apple.quarantine "/Applications/圣手编辑器.app"
+   codesign --force --deep --sign - "/Applications/圣手编辑器.app"
+   rm -rf "src-tauri/target/release/bundle/macos/圣手编辑器.app"
+   open "/Applications/圣手编辑器.app"
    ```
-   （先杀旧进程；`xattr -dr` 移除隔离属性避免 Gatekeeper 警告；`codesign` 自签名保证可启动；清理构建产物避免 Spotlight 搜到两个应用；最后启动新版本等用户验证）。
+   （先杀新旧进程；顺带删除旧 NotePadPro.app 避免两个编辑器并存；`xattr -dr` 移除隔离属性避免 Gatekeeper 警告；`codesign` 自签名保证可启动；清理构建产物避免 Spotlight 搜到两个应用；最后启动新版本等用户验证）。
 
 > 提交与安装会写入 `.git` 与 `/Applications`，需在沙箱外执行（提权）。
 > **每次改完代码都必须完整执行「打包（步骤 3）+ 安装（步骤 4）」并确认安装成功，不得省略，也不得仅作为可选项交给用户自行执行。**

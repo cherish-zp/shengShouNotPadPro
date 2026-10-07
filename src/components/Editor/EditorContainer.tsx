@@ -48,8 +48,8 @@ export default function EditorContainer() {
       >
         <FileText size={64} style={{ opacity: 0.2 }} />
         <div style={{ textAlign: "center" }}>
-          <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)", opacity: 0.7 }}>NotePadPro</h2>
-          <p style={{ fontSize: 13, marginBottom: 24, opacity: 0.5 }}>轻量 · 极速 · 便签编辑器</p>
+          <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8, color: "var(--text-primary)", opacity: 0.7 }}>圣手编辑器</h2>
+          <p style={{ fontSize: 13, marginBottom: 24, opacity: 0.5 }}>妙手 · 轻量 · 极速</p>
         </div>
         <button
           onClick={() => addTab()}

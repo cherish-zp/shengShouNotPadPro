@@ -1,8 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
-  "productName": "NotePadPro",
+  "productName": "圣手编辑器",
+  "mainBinaryName": "ShengShouBianJiQi",
   "version": "0.1.0",
-  "identifier": "com.notepadpro.editor",
+  "identifier": "com.cherish.shengshoubianjiqi",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -12,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "NotePadPro",
+        "title": "圣手编辑器",
         "width": 1200,
         "height": 800,
         "minWidth": 800,
@@ -38,8 +39,8 @@
     ],
     "category": "DeveloperTool",
     "shortDescription": "\u8f7b\u91cf\u6781\u901f\u7684\u4fbf\u7b7e\u7f16\u8f91\u5668",
-    "longDescription": "NotePadPro \u2014 \u8f7b\u91cf\u3001\u6781\u901f\u3001\u8de8\u7f16\u7801\u3001Markdown \u9884\u89c8\u7684\u4fbf\u7b7e / \u4ee3\u7801 / \u7ec8\u7aef\u7f16\u8f91\u5668",
-    "copyright": "\u00a9 2026 NotePadPro",
+    "longDescription": "圣手编辑器 — 轻量、极速、跨编码、Markdown 预览的便签 / 代码编辑器",
+    "copyright": "© 2026 圣手编辑器",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

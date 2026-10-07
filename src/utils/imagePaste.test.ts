@@ -327,7 +327,7 @@ describe("encodeImagePathForMarkdown / decodeImagePath", () => {
 });
 
 describe("extractStagingImageMoves", () => {
-  const stagingRoot = "/Users/me/Library/Application Support/com.notepadpro.editor/attachments/staging";
+  const stagingRoot = "/Users/me/Library/Application Support/com.cherish.shengshoubianjiqi/attachments/staging";
 
   it("扫出暂存链接并生成迁移计划（链接含 %20 编码，from 解码为真实路径）", () => {
     const content = `before\n\n![image](${encodeImagePathForMarkdown(

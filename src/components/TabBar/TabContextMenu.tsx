@@ -1,15 +1,17 @@
 import React from "react";
 import ContextMenu, { type ContextMenuItem } from "@/components/Common/ContextMenu";
 import { TAB_COLORS, type TabColor } from "@/types";
-import { Pencil, Copy, FolderOpen, X, ArrowUp, Save } from "lucide-react";
+import { Pencil, Copy, FolderOpen, X, Pin, PinOff, Save } from "lucide-react";
 
 interface TabContextMenuProps {
   x: number;
   y: number;
   tabId: string;
   hasFilePath: boolean;
+  pinned: boolean;
   onClose: () => void;
   onRename: () => void;
+  onTogglePin: () => void;
   onSetColor: (color: TabColor | undefined) => void;
   onCloseTab: () => void;
   onCloseOthers: () => void;
@@ -20,7 +22,7 @@ interface TabContextMenuProps {
 }
 
 export default function TabContextMenu({
-  x, y, tabId, hasFilePath, onClose, onRename, onSetColor, onCloseTab, onCloseOthers, onCloseAll, onCopyPath, onReveal, onSave,
+  x, y, tabId, hasFilePath, pinned, onClose, onRename, onTogglePin, onSetColor, onCloseTab, onCloseOthers, onCloseAll, onCopyPath, onReveal, onSave,
 }: TabContextMenuProps) {
   const items: ContextMenuItem[] = [
     { label: "重命名", icon: <Pencil size={14} />, shortcut: "双击", action: onRename },
@@ -53,7 +55,7 @@ export default function TabContextMenu({
   }
 
   items.push(
-    { label: "置顶", icon: <ArrowUp size={14} />, action: () => {} },
+    { label: pinned ? "取消置顶" : "置顶", icon: pinned ? <PinOff size={14} /> : <Pin size={14} />, action: onTogglePin },
     { label: "", action: () => {}, divider: true },
     { label: "关闭", icon: <X size={14} />, shortcut: "⌘W", action: onCloseTab },
     { label: "关闭其他", action: onCloseOthers },

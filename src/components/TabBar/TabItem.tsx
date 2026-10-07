@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { X } from "lucide-react";
+import { X, Pin } from "lucide-react";
 import type { Tab, TabColor } from "@/types";
 
 interface TabItemProps {
@@ -9,9 +9,32 @@ interface TabItemProps {
   onClose: () => void;
   onRename: (name: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  /** 拖拽排序（可选；搜索过滤时应禁用）。未传 onDragStart 时不开启拖拽 */
+  dragDisabled?: boolean;
+  /** 落点指示线相对本行的位置 */
+  dropIndicator?: "above" | "below" | null;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragOver?: (e: React.DragEvent) => void;
+  onDragLeave?: (e: React.DragEvent) => void;
+  onDrop?: (e: React.DragEvent) => void;
+  onDragEnd?: () => void;
 }
 
-export default function TabItem({ tab, isActive, onSelect, onClose, onRename, onContextMenu }: TabItemProps) {
+export default function TabItem({
+  tab,
+  isActive,
+  onSelect,
+  onClose,
+  onRename,
+  onContextMenu,
+  dragDisabled,
+  dropIndicator,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
+}: TabItemProps) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(tab.name);
   const [hovered, setHovered] = useState(false);
@@ -29,6 +52,8 @@ export default function TabItem({ tab, isActive, onSelect, onClose, onRename, on
     setEditing(false);
   };
 
+  const draggable = !editing && !dragDisabled && typeof onDragStart === "function";
+
   return (
     <div
       onClick={onSelect}
@@ -36,6 +61,12 @@ export default function TabItem({ tab, isActive, onSelect, onClose, onRename, on
       onDoubleClick={handleDoubleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      draggable={draggable}
+      onDragStart={draggable ? onDragStart : undefined}
+      onDragOver={draggable ? onDragOver : undefined}
+      onDragLeave={draggable ? onDragLeave : undefined}
+      onDrop={draggable ? onDrop : undefined}
+      onDragEnd={draggable ? onDragEnd : undefined}
       style={{
         display: "flex",
         alignItems: "center",
@@ -49,6 +80,24 @@ export default function TabItem({ tab, isActive, onSelect, onClose, onRename, on
         minHeight: 30,
       }}
     >
+      {/* 落点指示线：拖拽排序时显示在行的上/下边缘 */}
+      {dropIndicator && (
+        <div
+          style={{
+            position: "absolute",
+            left: 6,
+            right: 4,
+            height: 2,
+            borderRadius: 1,
+            background: "var(--accent)",
+            boxShadow: "0 0 4px var(--accent)",
+            pointerEvents: "none",
+            zIndex: 2,
+            ...(dropIndicator === "above" ? { top: -1 } : { bottom: -1 }),
+          }}
+        />
+      )}
+
       {/* Color dot - inline with name area */}
       <div style={{
         display: "flex",
@@ -128,7 +177,7 @@ export default function TabItem({ tab, isActive, onSelect, onClose, onRename, on
         )}
       </div>
 
-      {/* Right side: dirty dot + close button */}
+      {/* Right side: pin + dirty dot + close button */}
       <div style={{
         display: "flex",
         alignItems: "center",
@@ -137,6 +186,11 @@ export default function TabItem({ tab, isActive, onSelect, onClose, onRename, on
         paddingLeft: 4,
         paddingRight: 2,
       }}>
+        {/* Pinned indicator */}
+        {tab.pinned && !editing && (
+          <Pin size={11} style={{ color: "var(--accent)", flexShrink: 0 }} fill="var(--accent)" />
+        )}
+
         {/* Dirty indicator */}
         {tab.dirty && !editing && (
           <span style={{

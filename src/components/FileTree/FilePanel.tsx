@@ -39,14 +39,66 @@ function NotesSection() {
   const setTabColor = useTabStore((s) => s.setTabColor);
   const closeOthers = useTabStore((s) => s.closeOthers);
   const closeAll = useTabStore((s) => s.closeAll);
+  const reorderTabs = useTabStore((s) => s.reorderTabs);
+  const togglePinTab = useTabStore((s) => s.togglePinTab);
 
   const [filter, setFilter] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
 
+  // 拖拽排序状态：dragIndex 为拖起项在列表中的索引；indicator 为当前落点（行 + 上/下）
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [indicator, setIndicator] = useState<{ index: number; pos: "above" | "below" } | null>(null);
+  const indicatorRef = useRef(indicator);
+  indicatorRef.current = indicator;
+  // 搜索过滤时列表是子集、索引与 store 不对齐，禁用拖拽
+  const dragEnabled = !filter;
+
+  const handleDragStart = (index: number) => (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", tabs[index]?.name ?? "");
+    setDragIndex(index);
+  };
+
+  const handleDragOver = (index: number) => (e: React.DragEvent) => {
+    if (dragIndex === null) return;
+    // 置顶区 ↔ 普通区禁止跨区：不 preventDefault，光标显示禁行且不会触发 drop
+    if (!!tabs[index]?.pinned !== !!tabs[dragIndex]?.pinned) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pos: "above" | "below" = e.clientY < rect.top + rect.height / 2 ? "above" : "below";
+    setIndicator((prev) => (prev && prev.index === index && prev.pos === pos ? prev : { index, pos }));
+  };
+
+  const handleDragLeave = (index: number) => () => {
+    setIndicator((prev) => (prev && prev.index === index ? null : prev));
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const drop = indicatorRef.current;
+    if (dragIndex !== null && drop) {
+      const to = drop.index + (drop.pos === "below" ? 1 : 0);
+      // moveTab 为 splice 语义（先移除再插入），源在目标之前时插入点前移一位
+      reorderTabs(dragIndex, dragIndex < to ? to - 1 : to);
+    }
+    setDragIndex(null);
+    setIndicator(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setIndicator(null);
+  };
+
   const filtered = filter
     ? tabs.filter((t) => t.name.toLowerCase().includes(filter.toLowerCase()))
     : tabs;
+
+  // 置顶区与普通区之间的分隔线：画在「最后一张置顶便签」与「第一张普通便签」之间
+  const showGroupDivider = (i: number) =>
+    i > 0 && !filtered[i].pinned && !!filtered[i - 1]?.pinned;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -122,22 +174,33 @@ function NotesSection() {
             <span>{filter ? "没有匹配的便签" : "⌘N 新建便签"}</span>
           </div>
         ) : (
-          filtered.map((tab) => (
-            <TabItem
-              key={tab.id}
-              tab={tab}
-              isActive={tab.id === activeTabId}
-              onSelect={() => setActiveTab(tab.id)}
-              onClose={() => closeTab(tab.id)}
-              onRename={(name) => {
-                // 关联磁盘文件的便签：磁盘文件一并重命名；失败提示且不改显示名
-                renameTabPersisted(tab, name).catch((err) => window.alert(`重命名失败：${err}`));
-              }}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
-              }}
-            />
+          filtered.map((tab, i) => (
+            <React.Fragment key={tab.id}>
+              {showGroupDivider(i) && (
+                <div style={{ height: 1, background: "var(--border)", margin: "3px 10px" }} />
+              )}
+              <TabItem
+                tab={tab}
+                isActive={tab.id === activeTabId}
+                onSelect={() => setActiveTab(tab.id)}
+                onClose={() => closeTab(tab.id)}
+                onRename={(name) => {
+                  // 关联磁盘文件的便签：磁盘文件一并重命名；失败提示且不改显示名
+                  renameTabPersisted(tab, name).catch((err) => window.alert(`重命名失败：${err}`));
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
+                }}
+                dragDisabled={!dragEnabled}
+                dropIndicator={indicator?.index === i ? indicator.pos : null}
+                onDragStart={dragEnabled ? handleDragStart(i) : undefined}
+                onDragOver={dragEnabled ? handleDragOver(i) : undefined}
+                onDragLeave={dragEnabled ? handleDragLeave(i) : undefined}
+                onDrop={dragEnabled ? handleDrop : undefined}
+                onDragEnd={dragEnabled ? handleDragEnd : undefined}
+              />
+            </React.Fragment>
           ))
         )}
       </div>
@@ -149,8 +212,10 @@ function NotesSection() {
           y={contextMenu.y}
           tabId={contextMenu.tabId}
           hasFilePath={!!tabs.find((t) => t.id === contextMenu.tabId)?.filePath}
+          pinned={!!tabs.find((t) => t.id === contextMenu.tabId)?.pinned}
           onClose={() => setContextMenu(null)}
           onRename={() => {}}
+          onTogglePin={() => togglePinTab(contextMenu.tabId)}
           onSetColor={(color: TabColor | undefined) => setTabColor(contextMenu.tabId, color)}
           onCloseTab={() => closeTab(contextMenu.tabId)}
           onCloseOthers={() => closeOthers(contextMenu.tabId)}

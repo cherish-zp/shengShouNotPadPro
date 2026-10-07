@@ -143,8 +143,10 @@ export default function TabList() {
           y={contextMenu.y}
           tabId={contextMenu.tabId}
           hasFilePath={!!tabs.find((t) => t.id === contextMenu.tabId)?.filePath}
+          pinned={!!tabs.find((t) => t.id === contextMenu.tabId)?.pinned}
           onClose={() => setContextMenu(null)}
           onRename={() => {}}
+          onTogglePin={() => {}}
           onSetColor={(color: TabColor | undefined) => setTabColor(contextMenu.tabId, color)}
           onCloseTab={() => closeTab(contextMenu.tabId)}
           onCloseOthers={() => closeOthers(contextMenu.tabId)}

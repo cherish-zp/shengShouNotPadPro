@@ -1,4 +1,5 @@
 mod commands;
+mod migration;
 mod state;
 mod utils;
 
@@ -6,6 +7,12 @@ use state::AppState;
 use tauri::Emitter;
 
 pub fn run() {
+    // 改名（NotePadPro → 圣手编辑器）后 identifier 变更，先把旧 identifier 的
+    // WebView 本地存储 / 缓存 / 应用数据目录搬到新 identifier 下，再初始化 WebView。
+    if let Err(e) = migration::migrate_legacy_data_dirs() {
+        eprintln!("legacy data migration skipped: {e}");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -46,7 +53,7 @@ pub fn run() {
             commands::file_ops::ensure_dir,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building NotePadPro")
+        .expect("error while building 圣手编辑器")
         .run(|app, event| {
             // 从 Finder / 右键「打开方式」打开文件时：
             // 1. 自动移除 macOS 隔离属性（下一次打开就不会弹警告了）

@@ -11,6 +11,9 @@ export interface Tab {
   indentType: "spaces" | "tab";
   dirty: boolean;
   color?: string;
+  /** 置顶：钉在列表置顶区（数组前段），pinnedAt 用于区内排序（最近置顶在最上） */
+  pinned?: boolean;
+  pinnedAt?: number;
   createdAt: number;
 }
 

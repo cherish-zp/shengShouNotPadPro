@@ -1,0 +1,40 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 深色 zinc-950 微渐变底：与圣手码头/圣手捕影一致 -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1e1e23"/>
+      <stop offset="1" stop-color="#101013"/>
+    </linearGradient>
+    <!-- 笔尖中孔处的 emerald 微光晕：呼应系列标志性发光点 -->
+    <radialGradient id="glow" cx="0.5" cy="0.603" r="0.42">
+      <stop offset="0" stop-color="#34d399" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#34d399" stop-opacity="0"/>
+    </radialGradient>
+    <!-- 笔尖轮廓：emerald 渐变粗线 -->
+    <linearGradient id="nib" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6ee7b7"/>
+      <stop offset="1" stop-color="#10b981"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景：圆角方形（macOS 大图标圆角比例） -->
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="230" fill="url(#glow)"/>
+  <!-- 极细内描边提升质感 -->
+  <rect x="2" y="2" width="1020" height="1020" rx="228" fill="none" stroke="#ffffff" stroke-opacity="0.06" stroke-width="4"/>
+
+  <!-- 钢笔笔尖轮廓（盾形）：平缓圆肩 → 近直壁身部 → 下段收窄为笔尖，尖端压在基线上 -->
+  <path d="M512 258C648 258 726 352 726 478C726 592 550 676 512 740C474 676 298 592 298 478C298 352 376 258 512 258Z"
+        fill="none" stroke="url(#nib)" stroke-width="58" stroke-linejoin="round"/>
+  <!-- 笔尖中缝：自中孔直插笔尖尖端、直至纸面（下端被基线覆盖，像正在书写） -->
+  <path d="M512 618V748" fill="none" stroke="#fafafa" stroke-width="28" stroke-linecap="round"/>
+  <!-- 中孔 = 系列标志性发光点：emerald 光晕 + 实心圆 -->
+  <circle cx="512" cy="618" r="66" fill="#34d399" opacity="0.22"/>
+  <circle cx="512" cy="618" r="34" fill="#34d399"/>
+  <!-- 书写基线（与拱桥图标同一坐标）：笔尖尖端恰好落在线上，像正在书写 -->
+  <path d="M189 773H835" fill="none" stroke="#fafafa" stroke-width="58" stroke-linecap="round"/>
+
+  <!-- 墨迹波纹装饰，延续系列底部两条半透明白线 -->
+  <path d="M352 860c26-18 54-18 80 0s54 18 80 0 54-18 80 0 54 18 80 0" fill="none" stroke="#fafafa" stroke-opacity="0.30" stroke-width="30" stroke-linecap="round"/>
+  <path d="M412 914c22-14 46-14 68 0s46 14 68 0" fill="none" stroke="#fafafa" stroke-opacity="0.16" stroke-width="26" stroke-linecap="round"/>
+</svg>
