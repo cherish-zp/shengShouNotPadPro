@@ -150,29 +150,45 @@ jobs:
           import base64, os, sys
           secret = os.environ.get("SECRET_B64", "").strip()
           out_path = os.environ["KEY_OUT"]
-          def is_minisign_key_file(content):
-              return content.split(b"\n", 1)[0].startswith(b"untrusted comment")
-          # Accept up to double-base64 (the .key file itself is base64 already).
-          recognized = False
+          def find_key_line(text):
+              # 密钥的真身是单行 base64，解码后以 "untrusted comment" 开头且非公钥；
+              # tauri 的 TAURI_SIGNING_PRIVATE_KEY 只认这一行（圣手编辑器 v0.2.0
+              # 首发实测：喂「注释+密钥」两行结构会在空格处 base64 解码失败）
+              for line in text.splitlines():
+                  line = line.strip()
+                  if not line or line.startswith("untrusted comment") or line.startswith("-----"):
+                      continue
+                  try:
+                      decoded = base64.b64decode(line)
+                  except Exception:
+                      continue
+                  if decoded.startswith(b"untrusted comment") and b"public" not in decoded.split(b"\n", 1)[0]:
+                      return line
+              return None
+          # 形态1：原文（单行 dW50... / 完整密钥文件文本 / 解码后的两行结构）
+          cand = find_key_line(secret)
+          # 形态2：secret 本身被 base64 过 1-2 层，先逐层解码再找
           work = secret
           for _round in range(3):
+              if cand:
+                  break
               try:
-                  decoded = base64.b64decode(work)
+                  work = base64.b64decode(work).decode("utf-8", "ignore")
               except Exception:
                   break
-              if is_minisign_key_file(decoded):
-                  open(out_path + ".raw", "wb").write(decoded)
-                  recognized = True
-                  break
-              work = decoded.decode("utf-8", "ignore").strip()
-          if not recognized and is_minisign_key_file(secret.encode()):
-              open(out_path + ".raw", "wb").write(secret.encode())
-              recognized = True
-          if not recognized:
-              print("::error::TAURI_SIGNING_PRIVATE_KEY could not be normalized. Expected the .key file content (dW50... base64), its base64, or the raw key file.")
+              cand = find_key_line(work)
+          if not cand:
+              # 形态3：被展开成「注释行 + 密钥行」的两行结构——整体重新 base64 回单行
+              lines = [l.strip() for l in secret.splitlines() if l.strip()]
+              if len(lines) == 2 and lines[0].startswith("untrusted comment"):
+                  re_b64 = base64.b64encode(("\n".join(lines) + "\n").encode()).decode()
+                  if base64.b64decode(re_b64).startswith(b"untrusted comment"):
+                      cand = re_b64
+          if not cand:
+              print("::error::TAURI_SIGNING_PRIVATE_KEY 无法归一化：需要 .key 文件的 dW50... 单行内容（或其 base64），请勿填入 .key.pub 公钥")
               sys.exit(1)
-          # Final artifact: the single-line base64 form tauri expects.
-          open(out_path, "w").write(secret if is_minisign_key_file(base64.b64decode(secret)) else work)
+          with open(out_path, "w") as f:
+              f.write(cand)  # 不能补尾换行：tauri 对密钥串做严格 base64 解码，\n 会报 Invalid symbol 10
           print("updater signing key normalized and verified")
           PY
       - name: Build & release
