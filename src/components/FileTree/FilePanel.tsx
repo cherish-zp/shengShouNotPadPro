@@ -8,6 +8,7 @@ import ContextMenu from "@/components/Common/ContextMenu";
 import Modal from "@/components/Common/Modal";
 import { removeNodeByPath, findTabsForDeletion, buildTargetPath, isSameOrAncestorPath, moveNodeInTree, buildMovedPath, buildFileTreeNodes, buildFolderRoot, filterHiddenPreservingRoot, filterTreeByQuery, syncFolderRoots } from "./fileTreeUtils";
 import { FILE_RENAMED_EVENT, renameTabPersisted } from "@/utils/tabRename";
+import { tabMoveBounds } from "@/utils/tabOrder";
 import { classifyFileExtension } from "@/utils/quarantine";
 import { toast } from "@/utils/toast";
 import { fileSizeLimitMessage, getFileSizeBytes, isFileSizeOverLimit } from "@/utils/fileSize";
@@ -40,57 +41,97 @@ function NotesSection() {
   const closeOthers = useTabStore((s) => s.closeOthers);
   const closeAll = useTabStore((s) => s.closeAll);
   const reorderTabs = useTabStore((s) => s.reorderTabs);
+  const moveTabUp = useTabStore((s) => s.moveTabUp);
+  const moveTabDown = useTabStore((s) => s.moveTabDown);
   const togglePinTab = useTabStore((s) => s.togglePinTab);
 
   const [filter, setFilter] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
 
-  // 拖拽排序状态：dragIndex 为拖起项在列表中的索引；indicator 为当前落点（行 + 上/下）
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  // 拖拽排序（Pointer 事件实现，不依赖 HTML5 DnD——Tauri 在 macOS 上开启原生拖放
+  // 拦截后 WebView 内的 HTML5 拖拽不会触发）。indicator 为当前落点（行 + 上/下）
   const [indicator, setIndicator] = useState<{ index: number; pos: "above" | "below" } | null>(null);
   const indicatorRef = useRef(indicator);
   indicatorRef.current = indicator;
-  // 搜索过滤时列表是子集、索引与 store 不对齐，禁用拖拽
-  const dragEnabled = !filter;
+  const listRef = useRef<HTMLDivElement>(null);
+  // 指针拖拽会话：按下记录起点，移动超过阈值才算拖拽（与点击区分）
+  const dragState = useRef<{ index: number; startY: number; active: boolean } | null>(null);
+  // 拖过的行在 pointerup 后会派发 click，置位以防误切换选中便签
+  const suppressClickRef = useRef(false);
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
 
-  const handleDragStart = (index: number) => (e: React.DragEvent) => {
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", tabs[index]?.name ?? "");
-    setDragIndex(index);
+  // 按下便签行：记录拖拽起点（搜索过滤时列表是子集、索引与 store 不对齐，禁用拖拽）
+  const handleRowPointerDown = (index: number) => (e: React.PointerEvent) => {
+    if (filter || e.button !== 0) return;
+    // 关闭按钮 / 重命名输入框上的按下不触发拖拽
+    if ((e.target as HTMLElement).closest("button, input")) return;
+    suppressClickRef.current = false;
+    dragState.current = { index, startY: e.clientY, active: false };
   };
 
-  const handleDragOver = (index: number) => (e: React.DragEvent) => {
-    if (dragIndex === null) return;
-    // 置顶区 ↔ 普通区禁止跨区：不 preventDefault，光标显示禁行且不会触发 drop
-    if (!!tabs[index]?.pinned !== !!tabs[dragIndex]?.pinned) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pos: "above" | "below" = e.clientY < rect.top + rect.height / 2 ? "above" : "below";
-    setIndicator((prev) => (prev && prev.index === index && prev.pos === pos ? prev : { index, pos }));
-  };
-
-  const handleDragLeave = (index: number) => () => {
-    setIndicator((prev) => (prev && prev.index === index ? null : prev));
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const drop = indicatorRef.current;
-    if (dragIndex !== null && drop) {
-      const to = drop.index + (drop.pos === "below" ? 1 : 0);
-      // moveTab 为 splice 语义（先移除再插入），源在目标之前时插入点前移一位
-      reorderTabs(dragIndex, dragIndex < to ? to - 1 : to);
-    }
-    setDragIndex(null);
-    setIndicator(null);
-  };
-
-  const handleDragEnd = () => {
-    setDragIndex(null);
-    setIndicator(null);
-  };
+  useEffect(() => {
+    const onPointerMove = (e: PointerEvent) => {
+      const st = dragState.current;
+      if (!st) return;
+      if (!st.active) {
+        if (Math.abs(e.clientY - st.startY) < 6) return;
+        st.active = true;
+        suppressClickRef.current = true;
+        document.body.style.cursor = "grabbing";
+      }
+      // 命中测试：指针落在哪一行（置顶区 ↔ 普通区禁止跨区，异区行跳过）
+      const rows = listRef.current?.querySelectorAll<HTMLElement>("[data-tab-index]");
+      if (!rows || rows.length === 0) return;
+      const srcPinned = !!tabsRef.current[st.index]?.pinned;
+      let target: { index: number; pos: "above" | "below" } | null = null;
+      for (let i = 0; i < rows.length; i++) {
+        if (!!tabsRef.current[i]?.pinned !== srcPinned) continue;
+        const rect = rows[i].getBoundingClientRect();
+        if (e.clientY < rect.top + rect.height / 2) {
+          target = { index: i, pos: "above" };
+          break;
+        }
+      }
+      if (!target) {
+        for (let i = rows.length - 1; i >= 0; i--) {
+          if (!!tabsRef.current[i]?.pinned === srcPinned) {
+            target = { index: i, pos: "below" };
+            break;
+          }
+        }
+      }
+      if (!target) return;
+      setIndicator((prev) =>
+        prev && prev.index === target!.index && prev.pos === target!.pos ? prev : target
+      );
+    };
+    const onPointerUp = () => {
+      const st = dragState.current;
+      dragState.current = null;
+      document.body.style.cursor = "";
+      if (st?.active) {
+        const drop = indicatorRef.current;
+        if (drop) {
+          const to = drop.index + (drop.pos === "below" ? 1 : 0);
+          // moveTab 为 splice 语义（先移除再插入），源在目标之前时插入点前移一位
+          reorderTabs(st.index, st.index < to ? to - 1 : to);
+        }
+        // click 在 pointerup 之后同步派发，异步复位避免误选中拖过的行
+        setTimeout(() => { suppressClickRef.current = false; }, 0);
+      }
+      setIndicator(null);
+    };
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+    // reorderTabs 为 store 稳定引用；tabs 经 tabsRef 读取，无需随渲染重挂监听
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filtered = filter
     ? tabs.filter((t) => t.name.toLowerCase().includes(filter.toLowerCase()))
@@ -99,6 +140,9 @@ function NotesSection() {
   // 置顶区与普通区之间的分隔线：画在「最后一张置顶便签」与「第一张普通便签」之间
   const showGroupDivider = (i: number) =>
     i > 0 && !filtered[i].pinned && !!filtered[i - 1]?.pinned;
+
+  // 右键菜单「上移/下移」可用性（按所在区边界钳制）
+  const menuBounds = contextMenu ? tabMoveBounds(tabs, contextMenu.tabId) : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
@@ -164,7 +208,7 @@ function NotesSection() {
       )}
 
       {/* List */}
-      <div style={scrollContainerStyle}>
+      <div style={scrollContainerStyle} ref={listRef}>
         {filtered.length === 0 ? (
           <div style={{
             display: "flex", flexDirection: "column", alignItems: "center",
@@ -182,7 +226,11 @@ function NotesSection() {
               <TabItem
                 tab={tab}
                 isActive={tab.id === activeTabId}
-                onSelect={() => setActiveTab(tab.id)}
+                onSelect={() => {
+                  // 拖拽结束时落在本行上的 click 不切换选中
+                  if (suppressClickRef.current) return;
+                  setActiveTab(tab.id);
+                }}
                 onClose={() => closeTab(tab.id)}
                 onRename={(name) => {
                   // 关联磁盘文件的便签：磁盘文件一并重命名；失败提示且不改显示名
@@ -192,13 +240,9 @@ function NotesSection() {
                   e.preventDefault();
                   setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
                 }}
-                dragDisabled={!dragEnabled}
+                dataTabIndex={i}
                 dropIndicator={indicator?.index === i ? indicator.pos : null}
-                onDragStart={dragEnabled ? handleDragStart(i) : undefined}
-                onDragOver={dragEnabled ? handleDragOver(i) : undefined}
-                onDragLeave={dragEnabled ? handleDragLeave(i) : undefined}
-                onDrop={dragEnabled ? handleDrop : undefined}
-                onDragEnd={dragEnabled ? handleDragEnd : undefined}
+                onRowPointerDown={handleRowPointerDown(i)}
               />
             </React.Fragment>
           ))
@@ -213,6 +257,10 @@ function NotesSection() {
           tabId={contextMenu.tabId}
           hasFilePath={!!tabs.find((t) => t.id === contextMenu.tabId)?.filePath}
           pinned={!!tabs.find((t) => t.id === contextMenu.tabId)?.pinned}
+          onMoveUp={() => moveTabUp(contextMenu.tabId)}
+          onMoveDown={() => moveTabDown(contextMenu.tabId)}
+          canMoveUp={!!menuBounds?.canMoveUp}
+          canMoveDown={!!menuBounds?.canMoveDown}
           onClose={() => setContextMenu(null)}
           onRename={() => {}}
           onTogglePin={() => togglePinTab(contextMenu.tabId)}

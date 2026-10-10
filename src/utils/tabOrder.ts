@@ -62,6 +62,31 @@ export function moveTab<T extends OrderableTab>(tabs: T[], fromIndex: number, to
   return next;
 }
 
+/**
+ * 上移/下移一格（offset：-1 上移 / +1 下移），按 id 定位。
+ * 语义与 moveTab 完全一致：组内移动，越界与区边界均为 no-op。
+ */
+export function moveTabByOffset<T extends OrderableTab>(tabs: T[], id: string, offset: -1 | 1): T[] {
+  const index = tabs.findIndex((t) => t.id === id);
+  if (index === -1) return tabs;
+  return moveTab(tabs, index, index + offset);
+}
+
+/** 上移/下移是否可用（右键菜单禁用态）：不允许移出所在区 */
+export function tabMoveBounds<T extends OrderableTab>(
+  tabs: T[],
+  id: string
+): { canMoveUp: boolean; canMoveDown: boolean } {
+  const index = tabs.findIndex((t) => t.id === id);
+  if (index === -1) return { canMoveUp: false, canMoveDown: false };
+  const pinCount = pinnedCountOf(tabs);
+  const inPinZone = index < pinCount;
+  return {
+    canMoveUp: inPinZone ? index > 0 : index > pinCount,
+    canMoveDown: inPinZone ? index < pinCount - 1 : index < tabs.length - 1,
+  };
+}
+
 /** 整理为不变量顺序：置顶区（pinnedAt 降序，稳定）在前，普通区保持原相对顺序 */
 export function normalizeTabOrder<T extends OrderableTab>(tabs: T[]): T[] {
   if (!tabs.some((t) => t.pinned)) return tabs;

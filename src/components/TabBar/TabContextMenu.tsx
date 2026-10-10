@@ -1,7 +1,7 @@
 import React from "react";
 import ContextMenu, { type ContextMenuItem } from "@/components/Common/ContextMenu";
 import { TAB_COLORS, type TabColor } from "@/types";
-import { Pencil, Copy, FolderOpen, X, Pin, PinOff, Save } from "lucide-react";
+import { Pencil, Copy, FolderOpen, X, Pin, PinOff, Save, ArrowUp, ArrowDown } from "lucide-react";
 
 interface TabContextMenuProps {
   x: number;
@@ -9,6 +9,11 @@ interface TabContextMenuProps {
   tabId: string;
   hasFilePath: boolean;
   pinned: boolean;
+  /** 上移/下移（可选；仅便签列表等支持手动排序的场景传入） */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
   onClose: () => void;
   onRename: () => void;
   onTogglePin: () => void;
@@ -22,7 +27,7 @@ interface TabContextMenuProps {
 }
 
 export default function TabContextMenu({
-  x, y, tabId, hasFilePath, pinned, onClose, onRename, onTogglePin, onSetColor, onCloseTab, onCloseOthers, onCloseAll, onCopyPath, onReveal, onSave,
+  x, y, tabId, hasFilePath, pinned, onMoveUp, onMoveDown, canMoveUp, canMoveDown, onClose, onRename, onTogglePin, onSetColor, onCloseTab, onCloseOthers, onCloseAll, onCopyPath, onReveal, onSave,
 }: TabContextMenuProps) {
   const items: ContextMenuItem[] = [
     { label: "重命名", icon: <Pencil size={14} />, shortcut: "双击", action: onRename },
@@ -50,6 +55,15 @@ export default function TabContextMenu({
     items.push(
       { label: "复制路径", icon: <Copy size={14} />, action: onCopyPath },
       { label: "在 Finder 中显示", icon: <FolderOpen size={14} />, action: onReveal },
+      { label: "", action: () => {}, divider: true },
+    );
+  }
+
+  // 上移/下移：仅在父级传入处理器时出现；位于所在区边界时呈禁用态
+  if (onMoveUp || onMoveDown) {
+    items.push(
+      { label: "上移", icon: <ArrowUp size={14} />, action: () => onMoveUp?.(), disabled: !canMoveUp },
+      { label: "下移", icon: <ArrowDown size={14} />, action: () => onMoveDown?.(), disabled: !canMoveDown },
       { label: "", action: () => {}, divider: true },
     );
   }

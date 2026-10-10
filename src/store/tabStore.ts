@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { Tab, TabColor } from "@/types";
-import { moveTab, normalizeTabOrder, pinTab, unpinTab } from "@/utils/tabOrder";
+import { moveTab, moveTabByOffset, normalizeTabOrder, pinTab, unpinTab } from "@/utils/tabOrder";
 
 const STORAGE_KEY = "novaedit-tabs";
 
@@ -52,6 +52,8 @@ interface TabStore {
   setTabLineEnding: (id: string, lineEnding: "LF" | "CRLF") => void;
   setTabIndent: (id: string, size: number, type: "spaces" | "tab") => void;
   reorderTabs: (fromIndex: number, toIndex: number) => void;
+  moveTabUp: (id: string) => void;
+  moveTabDown: (id: string) => void;
   togglePinTab: (id: string) => void;
   closeOthers: (id: string) => void;
   closeAll: () => void;
@@ -221,6 +223,14 @@ export const useTabStore = create<TabStore>((set, get) => {
     reorderTabs: (fromIndex: number, toIndex: number) => {
       // moveTab 内含「禁止跨置顶区/普通区」的钳制
       pset({ tabs: moveTab(get().tabs, fromIndex, toIndex) });
+    },
+
+    moveTabUp: (id: string) => {
+      pset({ tabs: moveTabByOffset(get().tabs, id, -1) });
+    },
+
+    moveTabDown: (id: string) => {
+      pset({ tabs: moveTabByOffset(get().tabs, id, 1) });
     },
 
     togglePinTab: (id: string) => {

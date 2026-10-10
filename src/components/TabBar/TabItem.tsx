@@ -9,15 +9,12 @@ interface TabItemProps {
   onClose: () => void;
   onRename: (name: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
-  /** 拖拽排序（可选；搜索过滤时应禁用）。未传 onDragStart 时不开启拖拽 */
-  dragDisabled?: boolean;
   /** 落点指示线相对本行的位置 */
   dropIndicator?: "above" | "below" | null;
-  onDragStart?: (e: React.DragEvent) => void;
-  onDragOver?: (e: React.DragEvent) => void;
-  onDragLeave?: (e: React.DragEvent) => void;
-  onDrop?: (e: React.DragEvent) => void;
-  onDragEnd?: () => void;
+  /** 拖拽排序：行在列表中的序号（写入 data-tab-index 供命中测试） */
+  dataTabIndex?: number;
+  /** 拖拽排序：在行上按下指针时触发（父级监听 window 的 pointermove/up 完成排序） */
+  onRowPointerDown?: (e: React.PointerEvent) => void;
 }
 
 export default function TabItem({
@@ -27,13 +24,9 @@ export default function TabItem({
   onClose,
   onRename,
   onContextMenu,
-  dragDisabled,
   dropIndicator,
-  onDragStart,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  onDragEnd,
+  dataTabIndex,
+  onRowPointerDown,
 }: TabItemProps) {
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(tab.name);
@@ -52,8 +45,6 @@ export default function TabItem({
     setEditing(false);
   };
 
-  const draggable = !editing && !dragDisabled && typeof onDragStart === "function";
-
   return (
     <div
       onClick={onSelect}
@@ -61,12 +52,8 @@ export default function TabItem({
       onDoubleClick={handleDoubleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      draggable={draggable}
-      onDragStart={draggable ? onDragStart : undefined}
-      onDragOver={draggable ? onDragOver : undefined}
-      onDragLeave={draggable ? onDragLeave : undefined}
-      onDrop={draggable ? onDrop : undefined}
-      onDragEnd={draggable ? onDragEnd : undefined}
+      data-tab-index={dataTabIndex}
+      onPointerDown={onRowPointerDown}
       style={{
         display: "flex",
         alignItems: "center",

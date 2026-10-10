@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pinTab, unpinTab, moveTab, normalizeTabOrder } from "./tabOrder";
+import { pinTab, unpinTab, moveTab, moveTabByOffset, tabMoveBounds, normalizeTabOrder } from "./tabOrder";
 
 interface Item {
   id: string;
@@ -120,6 +120,59 @@ describe("moveTab（组内拖拽移动，禁止跨区）", () => {
     const tabs = list("a b");
     expect(moveTab(tabs, -1, 0)).toEqual(tabs);
     expect(moveTab(tabs, 5, 0)).toEqual(tabs);
+  });
+});
+
+describe("moveTabByOffset（按 id 上移/下移一格，组内钳制）", () => {
+  it("普通区内下移/上移一格", () => {
+    const tabs = [item("P1", true, 1), item("a"), item("b"), item("c")];
+    expect(ids(moveTabByOffset(tabs, "a", 1))).toEqual(["P1", "b", "a", "c"]);
+    expect(ids(moveTabByOffset(tabs, "b", -1))).toEqual(["P1", "b", "a", "c"]);
+  });
+
+  it("置顶区内上下移动", () => {
+    const tabs = [item("P1", true, 1), item("P2", true, 2), item("a")];
+    expect(ids(moveTabByOffset(tabs, "P1", 1))).toEqual(["P2", "P1", "a"]);
+    expect(ids(moveTabByOffset(tabs, "P2", -1))).toEqual(["P2", "P1", "a"]);
+  });
+
+  it("置顶区边界为 no-op：第一位不能上移，区内最后一位不能下移出区", () => {
+    const tabs = [item("P1", true, 1), item("P2", true, 2), item("a")];
+    expect(moveTabByOffset(tabs, "P1", -1)).toEqual(tabs);
+    expect(moveTabByOffset(tabs, "P2", 1)).toEqual(tabs);
+  });
+
+  it("普通区边界为 no-op：第一张普通便签不能上移进置顶区，最后一张不能下移", () => {
+    const tabs = [item("P1", true, 1), item("a"), item("b")];
+    expect(moveTabByOffset(tabs, "a", -1)).toEqual(tabs);
+    expect(moveTabByOffset(tabs, "b", 1)).toEqual(tabs);
+  });
+
+  it("不存在的 id 原样返回", () => {
+    const tabs = list("a b");
+    expect(moveTabByOffset(tabs, "x", 1)).toEqual(tabs);
+  });
+});
+
+describe("tabMoveBounds（右键菜单 上移/下移 可用性）", () => {
+  it("按所在区的边界给出可用性", () => {
+    const tabs = [item("P1", true, 1), item("P2", true, 2), item("a"), item("b")];
+    expect(tabMoveBounds(tabs, "P1")).toEqual({ canMoveUp: false, canMoveDown: true });
+    expect(tabMoveBounds(tabs, "P2")).toEqual({ canMoveUp: true, canMoveDown: false });
+    expect(tabMoveBounds(tabs, "a")).toEqual({ canMoveUp: false, canMoveDown: true });
+    expect(tabMoveBounds(tabs, "b")).toEqual({ canMoveUp: true, canMoveDown: false });
+  });
+
+  it("无置顶时整表首尾同理", () => {
+    const tabs = list("a b c");
+    expect(tabMoveBounds(tabs, "a")).toEqual({ canMoveUp: false, canMoveDown: true });
+    expect(tabMoveBounds(tabs, "b")).toEqual({ canMoveUp: true, canMoveDown: true });
+    expect(tabMoveBounds(tabs, "c")).toEqual({ canMoveUp: true, canMoveDown: false });
+  });
+
+  it("不存在的 id 双双不可用", () => {
+    const tabs = list("a");
+    expect(tabMoveBounds(tabs, "x")).toEqual({ canMoveUp: false, canMoveDown: false });
   });
 });
 
