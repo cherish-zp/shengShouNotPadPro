@@ -20,6 +20,14 @@
   Gitee 常驻 latest 更新检查端点；提供手动重跑与本地补传大附件入口。
 
 ### Changed
+- **依赖与构建链全面升级**：React 19、TypeScript 7（原生编译器）、Vite 8（Rolldown 内核）、
+  Vitest 5、Zustand 5、diff 9、lucide-react 1.x、CodeMirror 6 全系最新、Tauri 2.12；
+  Rust 侧 git2 0.21、dirs 7 并全量 `cargo update`。npm 依赖零过时。
+- **移除未使用的 Tailwind CSS**：全项目无任何 Tailwind 工具类（样式走内联 style + CSS 变量），
+  移除 tailwindcss / postcss / autoprefixer 依赖与配置；原由 Tailwind preflight 提供的
+  全局重置（box-sizing、元素归一等）已以内联等价规则自持，渲染效果不变。
+- **CI Actions 升级**：checkout v7 / setup-node v7 / upload-artifact v7 / tauri-action v1，
+  Linux runner 升级 ubuntu-24.04，消除 Node.js 20 弃用警告。
 - **应用更名「圣手编辑器」**：并入「圣手」系列本地工具（与圣手码头、圣手捕影同系列），
   品牌分层命名——用户可见名「圣手编辑器」、包内可执行名 `ShengShouBianJiQi`、
   identifier `com.cherish.shengshoubianjiqi`。
