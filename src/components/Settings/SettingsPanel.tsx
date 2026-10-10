@@ -1,16 +1,19 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Modal from "@/components/Common/Modal";
 import { useEditorStore } from "@/store/editorStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { useUpdateStore } from "@/store/updateStore";
 import { ACCENT_PRESETS } from "@/utils/themes";
+import { isTauriEnvironment } from "@/utils/updateLogic";
 
-type SettingsTab = "general" | "editor" | "theme" | "keybindings";
+type SettingsTab = "general" | "editor" | "theme" | "keybindings" | "about";
 
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "general", label: "通用" },
   { id: "editor", label: "编辑器" },
   { id: "theme", label: "外观" },
   { id: "keybindings", label: "快捷键" },
+  { id: "about", label: "关于与更新" },
 ];
 
 export default function SettingsPanel() {
@@ -169,6 +172,8 @@ export default function SettingsPanel() {
             </>
           )}
 
+          {activeTab === "about" && <AboutTab />}
+
           {activeTab === "keybindings" && (
             <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
               {[
@@ -196,6 +201,129 @@ function SettingRow({ label, children }: { label: string; children: React.ReactN
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
       <span style={{ fontSize: 13, color: "var(--text-primary)" }}>{label}</span>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>{children}</div>
+    </div>
+  );
+}
+
+/** 「关于与更新」tab：当前版本、更新状态与操作、版权信息 */
+function AboutTab() {
+  const phase = useUpdateStore((s) => s.phase);
+  const version = useUpdateStore((s) => s.version);
+  const progress = useUpdateStore((s) => s.progress);
+  const error = useUpdateStore((s) => s.error);
+  const checkNow = useUpdateStore((s) => s.checkNow);
+  const downloadAndInstall = useUpdateStore((s) => s.downloadAndInstall);
+  const restartToUpdate = useUpdateStore((s) => s.restartToUpdate);
+  const ignoreCurrentVersion = useUpdateStore((s) => s.ignoreCurrentVersion);
+  // 当前应用版本：Tauri 环境动态读取，兜底与 tauri.conf.json 一致
+  const [appVersion, setAppVersion] = useState("0.2.0");
+
+  useEffect(() => {
+    if (!isTauriEnvironment()) return;
+    import("@tauri-apps/api/app")
+      .then((m) => m.getVersion())
+      .then((v) => {
+        if (v) setAppVersion(v);
+      })
+      .catch(() => {});
+  }, []);
+
+  // 各 phase 对应的中文状态文案
+  const statusText =
+    phase === "checking"
+      ? "检查中…"
+      : phase === "up-to-date"
+        ? "已是最新版本"
+        : phase === "available"
+          ? `发现新版本 v${version}`
+          : phase === "downloading"
+            ? `下载中 ${progress}%`
+            : phase === "ready"
+              ? "更新已就绪，待重启"
+              : phase === "error"
+                ? "出错"
+                : "未检查";
+
+  const btn: React.CSSProperties = {
+    padding: "6px 14px",
+    borderRadius: 8,
+    fontSize: 13,
+    cursor: "pointer",
+    border: "1px solid var(--border)",
+    background: "var(--bg-hover)",
+    color: "var(--text-primary)",
+    transition: "all 0.15s",
+  };
+  const primaryBtn: React.CSSProperties = {
+    ...btn,
+    border: "none",
+    background: "var(--accent)",
+    color: "var(--bg-primary)",
+  };
+  const hoverPrimary = (e: React.MouseEvent<HTMLButtonElement>) =>
+    (e.currentTarget.style.background = "var(--accent-hover)");
+  const leavePrimary = (e: React.MouseEvent<HTMLButtonElement>) =>
+    (e.currentTarget.style.background = "var(--accent)");
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <SettingRow label="当前版本">
+        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>v{appVersion}</span>
+      </SettingRow>
+      <SettingRow label="更新状态">
+        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>{statusText}</span>
+      </SettingRow>
+      {phase === "error" && error && (
+        <div style={{ fontSize: 12, color: "var(--error, #ff3b30)", wordBreak: "break-all" }}>
+          {error}
+        </div>
+      )}
+      <SettingRow label="操作">
+        <div style={{ display: "flex", gap: 8 }}>
+          {phase === "available" && (
+            <>
+              <button
+                onClick={() => void downloadAndInstall()}
+                style={primaryBtn}
+                onMouseEnter={hoverPrimary}
+                onMouseLeave={leavePrimary}
+              >
+                立即更新
+              </button>
+              <button onClick={ignoreCurrentVersion} style={btn} title="这个版本不再提示">
+                忽略此版本
+              </button>
+            </>
+          )}
+          {phase === "ready" && (
+            <button
+              onClick={() => void restartToUpdate()}
+              style={primaryBtn}
+              onMouseEnter={hoverPrimary}
+              onMouseLeave={leavePrimary}
+            >
+              重启并更新
+            </button>
+          )}
+          <button
+            disabled={phase === "checking" || phase === "downloading"}
+            onClick={() => void checkNow()}
+            style={{
+              ...btn,
+              opacity: phase === "checking" || phase === "downloading" ? 0.5 : 1,
+              cursor: phase === "checking" || phase === "downloading" ? "not-allowed" : "pointer",
+            }}
+          >
+            {phase === "checking" ? "检查中…" : "检查更新"}
+          </button>
+        </div>
+      </SettingRow>
+      <div style={{ fontSize: 12, color: "var(--text-secondary)", opacity: 0.7 }}>
+        启动后与每小时会自动静默检查更新（失败不打扰）。
+      </div>
+      <div style={{ marginTop: "auto", paddingTop: 12, fontSize: 12, color: "var(--text-secondary)" }}>
+        © 2026 圣手编辑器
+      </div>
     </div>
   );
 }

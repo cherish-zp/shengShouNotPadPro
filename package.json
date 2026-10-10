@@ -1,7 +1,7 @@
 {
   "name": "sheng-shou-bian-ji-qi",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -35,7 +35,9 @@
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "@tauri-apps/plugin-fs": "^2.0.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
     "@tauri-apps/plugin-shell": "^2.0.0",
+    "@tauri-apps/plugin-updater": "^2.13.2",
     "diff": "^5.0.0",
     "lucide-react": "^0.300.0",
     "react": "^18.2.0",

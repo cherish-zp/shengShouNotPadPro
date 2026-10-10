@@ -1,0 +1,537 @@
+# 圣手编辑器构建与发布流水线（Tauri 2 + tauri-action）
+#
+# 触发：
+#   - push tag `v*`  -> 构建三平台产物并直接创建 GitHub Release，
+#                       随后把 Release 附件同步到 Gitee（需配置 GITEE_TOKEN secret，
+#                       未配置时自动跳过，可运行 scripts/sync-gitee-release.sh 本地兜底）
+#   - workflow_dispatch -> 仅构建并上传 workflow artifacts（手动验证用）
+#   - workflow_dispatch + tag 输入 -> 跳过构建，仅重跑清单组装与 Gitee 同步
+#
+# 更新签名：minisign 私钥从 secret TAURI_SIGNING_PRIVATE_KEY 归一化解出
+# （支持密钥文件原文 / 单层 / 双层 base64），私钥丢失 = 已发用户永远收不到更新，
+# 务必备份（见 docs/RELEASE.md）。
+# Apple 签名/公证未启用（不影响应用内自动更新——updater 用的是 minisign 签名），
+# 启用方法见 docs/RELEASE.md。
+
+name: build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '已发布 tag（如 v0.2.0）——仅重跑清单组装/Gitee 同步，不重新构建'
+        required: false
+        type: string
+
+jobs:
+  # ---------- 质量门禁：前端单测 + 类型检查 + 前端构建 + Rust 测试 ----------
+  check:
+    name: Check (ubuntu)
+    if: ${{ github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-22.04 # 若 runner 退役可改 ubuntu-24.04，系统依赖相同
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Tauri v2 Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run frontend unit tests (vitest)
+        run: npm test
+
+      - name: Type-check frontend
+        run: npx tsc --noEmit
+
+      - name: Build frontend
+        run: npx vite build
+
+      - name: Run Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --all-features --workspace
+
+  # ---------- 三平台构建（macOS arm64 / macOS Intel / Windows x64；不做 Linux）----------
+  build:
+    name: Build ${{ matrix.slug }}
+    if: ${{ github.event_name != 'workflow_dispatch' }}
+    needs: check
+    runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: write # tauri-action 创建 Release 需要写权限
+      issues: write # 构建失败时把日志开成 Issue（匿名可读，便于远程排障）
+      actions: read # gh run view --log-failed 读取失败日志
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macOS arm64（Apple Silicon）。macOS 链路对中文 productName 稳健，
+          # .app/dmg 使用「圣手编辑器」；GitHub 附件名会被服务端清洗为 ASCII
+          # （圣手编辑器_ → _），由 assemble-updater-json job 统一改名
+          # 为 ShengShouBianJiQi 前缀。
+          # 如需 universal2 合并包，可将两个 macos job 换成单个
+          # --target universal-apple-darwin（见 docs/RELEASE.md）
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+            slug: macos-arm64
+          # macOS Intel
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+            slug: macos-intel
+          # Windows：NSIS 等工具链对非 ASCII 文件名不可靠（实测剥字/构建失败），
+          # 构建时覆盖为 ASCII productName
+          - platform: windows-latest
+            args: --config '{"productName":"ShengShouBianJiQi"}'
+            slug: windows-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Normalize updater signing key
+        shell: bash
+        env:
+          SECRET_B64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          KEY_OUT: ${{ runner.temp }}/updater-signing.key
+        run: |
+          # tauri's TAURI_SIGNING_PRIVATE_KEY (string form) accepts ONLY the
+          # single-line base64 of the minisign key (= content of the .key file).
+          # Secret may be that base64 or the raw key file — normalize here.
+          # KEY_OUT uses $RUNNER_TEMP: a path ALL processes on the runner
+          # (bash, python3, node) resolve identically — /tmp does NOT (a Git
+          # Bash virtual path invisible to native Windows processes; this
+          # exact mismatch failed the Windows job in 圣手码头 v0.3.0).
+          python3 - << 'PY'
+          import base64, os, sys
+          secret = os.environ.get("SECRET_B64", "").strip()
+          out_path = os.environ["KEY_OUT"]
+          def is_minisign_key_file(content):
+              return content.split(b"\n", 1)[0].startswith(b"untrusted comment")
+          # Accept up to double-base64 (the .key file itself is base64 already).
+          recognized = False
+          work = secret
+          for _round in range(3):
+              try:
+                  decoded = base64.b64decode(work)
+              except Exception:
+                  break
+              if is_minisign_key_file(decoded):
+                  open(out_path + ".raw", "wb").write(decoded)
+                  recognized = True
+                  break
+              work = decoded.decode("utf-8", "ignore").strip()
+          if not recognized and is_minisign_key_file(secret.encode()):
+              open(out_path + ".raw", "wb").write(secret.encode())
+              recognized = True
+          if not recognized:
+              print("::error::TAURI_SIGNING_PRIVATE_KEY could not be normalized. Expected the .key file content (dW50... base64), its base64, or the raw key file.")
+              sys.exit(1)
+          # Final artifact: the single-line base64 form tauri expects.
+          open(out_path, "w").write(secret if is_minisign_key_file(base64.b64decode(secret)) else work)
+          print("updater signing key normalized and verified")
+          PY
+      - name: Build & release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # ---- 更新器签名（minisign）：CI 从 secret 解码私钥文件（见上一步），
+          # env 传文件路径。私钥丢失 = 老用户收不到更新，务必备份 ----
+          TAURI_SIGNING_PRIVATE_KEY: ${{ runner.temp }}/updater-signing.key
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # ---- macOS 签名 + 公证（购买 Apple Developer 账号后按 docs/RELEASE.md 加回）----
+          # 注意：不要以空字符串形式保留 APPLE_* env——secret 不存在时
+          # `${{ secrets.X }}` 仍会把变量设置为空串，Tauri bundler 检测到
+          # APPLE_CERTIFICATE 存在（哪怕为空）就会尝试导入证书并直接失败。
+          # 启用签名时取消注释以下行并配置对应 secrets：
+          # APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          # APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          # APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          projectPath: .
+          # tag 触发时创建 Release；手动触发时留空 -> 仅上传 artifacts
+          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          releaseName: ${{ startsWith(github.ref, 'refs/tags/v') && '圣手编辑器 v__VERSION__' || '' }}
+          releaseBody: '从下方 Assets 下载对应平台的安装包。更新内容见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)。'
+          # 直接发布（圣手码头同款链路）：tag 推送即出正式 Release
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      # workflow_dispatch（无 tag）时的产物兜底上传，产物名带平台便于下载
+      # （本项目 bundle targets 为 app/dmg/nsis，无 msi/deb/rpm/AppImage）
+      - name: Upload bundles (workflow_dispatch)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: shengshoubianjiqi-${{ matrix.slug }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/*/release/bundle/dmg/*.dmg
+            src-tauri/target/*/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/release/bundle/nsis/*.exe
+
+      # 失败诊断：把失败步骤的日志尾部开成公开 Issue（Actions 日志对
+      # 未登录访客不可见，Issue 让远程协作者无需登录即可定位）
+      - name: Open diagnostic issue on failure
+        if: ${{ failure() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_JOB_ID: ${{ github.job }}
+        run: |
+          # --log-failed proved unreliable (empty on real failures); the REST
+          # job-logs endpoint returns the full log — keep only the tail.
+          LOGS=$(gh api "repos/${{ github.repository }}/actions/jobs/$GITHUB_JOB_ID/logs" 2>/dev/null | tail -120 \
+                 || gh run view "$GITHUB_RUN_ID" --job "$GITHUB_JOB_ID" --log-failed 2>/dev/null | tail -120 \
+                 || echo "both log fetch paths failed")
+          {
+            echo "平台: ${{ matrix.slug }}"
+            echo "运行: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo '<details><summary>失败日志（最后 120 行）</summary>'
+            echo ""
+            echo '```'
+            echo "$LOGS"
+            echo '```'
+            echo '</details>'
+          } > body.md
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "[CI] ${{ matrix.slug }} 构建失败 @ ${{ github.ref_name }} (${{ github.run_id }})" \
+            --body-file body.md || echo "::warning::diagnostic issue creation failed"
+
+  # （不设 patch-release-names job：实测 GitHub 服务端会清洗附件名中的
+  #   非 ASCII 字符，PATCH 改中文名返回 200 也会被清洗回去；改名逻辑已并入
+  #   assemble-updater-json——统一改为 ASCII 前缀 ShengShouBianJiQi）
+
+  # ---------- 重组 latest.json（确定性，绕开 tauri-action 合并缺陷）----------
+  # 实测（圣手码头验证）两件事：
+  # 1) tauri-action 矩阵并行合并 latest.json 会丢 macOS 条目（platforms 只剩
+  #    linux/windows 键，darwin 键整个缺失，macOS 用户检查更新报
+  #    "None of the fallback platforms"）；
+  # 2) GitHub 服务端会静默清洗附件名中的非 ASCII 字符（圣手编辑器_ → _），
+  #    且 PATCH 改回中文名返回 200 却再次被清洗——**GitHub 附件名只能 ASCII**。
+  # 这里从 Release 的 .sig 附件确定性重组清单：版本取 tag，签名取对应 .sig
+  # 文件内容，URL 取 browser_download_url；先把 `_` 前缀附件改名为
+  # ShengShouBianJiQi 前缀（ASCII，Gitee 侧由 sync 脚本再转「圣手编辑器」）。
+  # 缺任一必需平台则 job 失败（发版必须三平台齐全）。
+  assemble-updater-json:
+    name: Assemble updater manifest
+    needs: [build]
+    if: ${{ !cancelled() && needs.build.result != 'failure' && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Rebuild latest.json from release signatures
+        run: |
+          python3 - << 'PYEOF'
+          import json, os, subprocess, time, urllib.parse, urllib.request
+          from datetime import datetime, timezone
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          tag = os.environ["TAG"]
+          version = tag[1:] if tag.startswith("v") else tag
+          ascii_prefix = "ShengShouBianJiQi"
+          print(f"TAG={tag!r} REPO={repo!r} version={version!r}")
+
+          def gh(*args, check=True):
+              return subprocess.run(["gh", "api", *args], check=check,
+                                    capture_output=True, text=True)
+
+          def get_release(attempt=1):
+              try:
+                  return json.loads(gh(f"repos/{repo}/releases/tags/{tag}").stdout)
+              except subprocess.CalledProcessError as e:
+                  if attempt >= 5:
+                      raise
+                  print(f"release lookup failed (attempt {attempt}): {e.stderr.strip()[:120]} — retrying")
+                  time.sleep(10 * attempt)
+                  return get_release(attempt + 1)
+
+          rel = get_release()
+          assets = rel["assets"]
+          print(f"release id={rel['id']} assets={len(assets)}")
+
+          # 1) 恢复附件名的统一 ASCII 前缀（GitHub 会清洗非 ASCII——改中文名
+          #    返回 200 也会被清洗回去；改 ASCII 名才真正生效），并同步刷新
+          #    内存中的 browser_download_url（改名后旧 URL 会失效）
+          for a in assets:
+              name = a["name"]
+              if name[:1] in ("_", "-"):
+                  new_name = ascii_prefix + name
+                  try:
+                      gh("-X", "PATCH", f"repos/{repo}/releases/assets/{a['id']}",
+                         "-f", f"name={new_name}")
+                      print(f"renamed: {name!r} -> {new_name!r}")
+                      a["name"] = new_name
+                      a["browser_download_url"] = (
+                          f"https://github.com/{repo}/releases/download/{tag}/"
+                          + urllib.parse.quote(new_name))
+                  except subprocess.CalledProcessError as e:
+                      print(f"rename skipped for {name!r}: {e.stderr.strip()[:120]}")
+          assets = rel["assets"]
+
+          def find(suffix):
+              for a in assets:
+                  if a["name"].endswith(suffix):
+                      return a
+              return None
+
+          def fetch(url, attempt=1):
+              try:
+                  return urllib.request.urlopen(url, timeout=60).read().decode().strip()
+              except Exception as e:
+                  if attempt >= 4:
+                      raise
+                  print(f"fetch retry {attempt} for {url.rsplit('/', 1)[-1]}: {e}")
+                  time.sleep(10 * attempt)
+                  return fetch(url, attempt + 1)
+
+          # 平台键 → 附件名后缀（同一附件可挂多个键：updater 逐个探测）
+          MAPPING = [
+              ("darwin-aarch64", "_aarch64.app.tar.gz"),
+              ("darwin-aarch64-app", "_aarch64.app.tar.gz"),
+              ("darwin-x86_64", "_x64.app.tar.gz"),
+              ("darwin-x86_64-app", "_x64.app.tar.gz"),
+              ("windows-x86_64", "_x64-setup.exe"),
+              ("windows-x86_64-nsis", "_x64-setup.exe"),
+              ("windows-x86_64-msi", "_x64_en-US.msi"),
+          ]
+
+          platforms = {}
+          for key, suffix in MAPPING:
+              if key in platforms:
+                  continue
+              a = find(suffix)
+              if not a:
+                  continue
+              sig_asset = find(a["name"] + ".sig")
+              if not sig_asset:
+                  raise SystemExit(f"signature missing: {a['name']}.sig")
+              sig = fetch(sig_asset["browser_download_url"])
+              platforms[key] = {"signature": sig, "url": a["browser_download_url"]}
+              print(f"{key} -> {a['name']}")
+
+          required = {"darwin-aarch64", "darwin-x86_64", "windows-x86_64"}
+          missing = required - set(platforms)
+          if missing:
+              raise SystemExit(f"required platforms missing from release: {sorted(missing)}")
+
+          doc = {
+              "version": version,
+              "notes": "",
+              "pub_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "platforms": platforms,
+          }
+          json.dump(doc, open("latest.json", "w"), ensure_ascii=False, indent=2)
+
+          # 2) 替换 Release 上的 latest.json（先删后传，重试加固）
+          for attempt in range(1, 6):
+              try:
+                  rel2 = json.loads(gh(f"repos/{repo}/releases/tags/{tag}").stdout)
+                  old = [a for a in rel2["assets"] if a["name"] == "latest.json"]
+                  for a in old:
+                      gh("-X", "DELETE", f"repos/{repo}/releases/assets/{a['id']}")
+                      print(f"deleted old latest.json asset {a['id']}")
+                  if old:
+                      time.sleep(5)  # 删除后索引短暂不一致，等一等再传
+                  # 注意：附件上传必须走 uploads.github.com（gh api 默认
+                  # api.github.com 对该路由返回 404）
+                  subprocess.run(
+                      ["gh", "api", "--method", "POST",
+                       f"https://uploads.github.com/repos/{repo}/releases/{rel2['id']}/assets?name=latest.json",
+                       "--input", "latest.json",
+                       "-H", "Content-Type: application/octet-stream"],
+                      check=True, capture_output=True, text=True)
+                  print("latest.json uploaded")
+                  break
+              except subprocess.CalledProcessError as e:
+                  print(f"replace attempt {attempt} failed: {(e.stderr or e.stdout).strip()[:200]}")
+                  if attempt >= 5:
+                      raise
+                  time.sleep(10 * attempt)
+          print("DONE")
+          PYEOF
+
+  # ---------- Gitee 同步（圣手码头模式）----------
+  # GitHub Release 发布后，把附件同步到 Gitee Release。全程 best-effort：
+  # 未配置 GITEE_TOKEN 时跳过；同步失败不阻塞 GitHub 发布（可用
+  # scripts/sync-gitee-release.sh 本地兜底）。
+  sync-gitee:
+    name: Sync release to Gitee
+    needs: [build, assemble-updater-json]
+    if: ${{ !cancelled() && needs.build.result != 'failure' && needs.assemble-updater-json.result != 'failure' && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+      GITEE_OWNER: princess-zp
+      GITEE_REPO: shengShouNotPadPro
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - name: Skip when GITEE_TOKEN is not configured
+        if: env.GITEE_TOKEN == ''
+        run: echo "::notice::GITEE_TOKEN 未配置，跳过 Gitee 同步（可用 scripts/sync-gitee-release.sh 本地兜底）"
+
+      - name: Sync assets to Gitee release
+        if: env.GITEE_TOKEN != ''
+        shell: bash
+        continue-on-error: true
+        env:
+          # gh CLI 需要显式 token（Actions 不会自动注入环境变量）
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          API="https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}"
+
+          # 1) GitHub Release 正文（tauri-action 已生成）
+          BODY=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body)
+          echo "GitHub release body fetched (${#BODY} chars)"
+
+          # 2) Gitee Release：存在则复用，不存在则创建（幂等）
+          RELEASE_ID=$(curl -sf --connect-timeout 20 "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/tags/${TAG}?access_token=${GITEE_TOKEN}" | jq -r '.id // empty' || true)
+          if [ -z "${RELEASE_ID}" ]; then
+            echo "Creating Gitee release ${TAG}..."
+            PAYLOAD=$(jq -n --arg tag "$TAG" --arg body "$BODY" \
+              '{tag_name: $tag, name: ("圣手编辑器 " + $tag), body: $body, prerelease: false, target_commitish: "main"}')
+            RELEASE_ID=$(curl -sf --connect-timeout 20 -X POST "${API}/releases?access_token=${GITEE_TOKEN}" \
+              -H 'Content-Type: application/json' -d "$PAYLOAD" | jq -r '.id') || true
+            if [ -z "${RELEASE_ID}" ]; then
+              echo "::error::failed to create Gitee release (check GITEE_TOKEN permissions: projects)"
+              exit 1
+            fi
+          fi
+          echo "Gitee release id: ${RELEASE_ID}"
+
+          # 3) 下载 GitHub Release 全部附件
+          # （必须先下载：latest.json 维护与附件上传都依赖 dist/）
+          rm -rf dist && mkdir -p dist
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir dist
+
+          # ---- 维护 Gitee 常驻 latest release（自动更新检查端点）----
+          # tauri-action 生成的 latest.json 中 URL 指向 GitHub；Gitee 版重写为
+          # 指向 Gitee 版本化 Release（releases/download/<TAG>/<附件名>）后，
+          # 上传到名为 latest 的常驻 release（每次发版覆盖）。附件名映射：
+          # GitHub 的 ShengShouBianJiQi 前缀 → Gitee 的「圣手编辑器」前缀。
+          if [ -f dist/latest.json ]; then
+            LATEST_ID=$(curl -sf --connect-timeout 20 "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/tags/latest?access_token=${GITEE_TOKEN}" | jq -r '.id // empty' || true)
+            if [ -z "$LATEST_ID" ]; then
+              LATEST_ID=$(curl -sf --connect-timeout 20 -X POST "${API}/releases?access_token=${GITEE_TOKEN}" \
+                -H 'Content-Type: application/json' \
+                -d '{"tag_name":"latest","name":"Latest release (auto-update endpoint)","body":"自动更新检查端点——请勿手动编辑","prerelease":true,"target_commitish":"main"}' | jq -r '.id') || true
+            fi
+            echo "latest release id: ${LATEST_ID}"
+            if [ -n "$LATEST_ID" ]; then
+              python3 - "$TAG" << 'PYEOF'
+          import json, sys, urllib.parse, os
+
+          tag = sys.argv[1]
+          owner = os.environ["GITEE_OWNER"]
+          repo = os.environ["GITEE_REPO"]
+          d = json.load(open("dist/latest.json"))
+          base = f"https://gitee.com/{owner}/{repo}/releases/download/{tag}/"
+          for v in d.get("platforms", {}).values():
+              name = urllib.parse.unquote(v["url"].rsplit("/", 1)[-1])
+              if name.startswith("ShengShouBianJiQi"):
+                  name = "圣手编辑器" + name[len("ShengShouBianJiQi"):]
+              v["url"] = base + urllib.parse.quote(name)
+          json.dump(d, open("dist/latest.json", "w"), ensure_ascii=False, indent=2)
+          print("latest.json rewritten ->", base)
+          PYEOF
+              OLD_LJ=$(curl -sf "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${LATEST_ID}/attach_files?access_token=${GITEE_TOKEN}&per_page=100" | jq -r '.[] | select(.name=="latest.json") | .id' || true)
+              [ -n "$OLD_LJ" ] && curl -sf -X DELETE "${API}/releases/${LATEST_ID}/attach_files/${OLD_LJ}?access_token=${GITEE_TOKEN}" || true
+              for i in 1 2 3 4; do
+                if curl -fS --connect-timeout 20 --max-time 600 \
+                     -X POST "${API}/releases/${LATEST_ID}/attach_files?access_token=${GITEE_TOKEN}" \
+                     -F "file=@dist/latest.json" 2>lj_err.txt; then
+                  echo "latest.json uploaded to Gitee latest release"; break
+                fi
+                [ "$i" = 4 ] && echo "::error::failed to upload latest.json to Gitee latest release"
+                sleep 20
+              done
+            fi
+          fi
+
+          # 4) 幂等上传：同名附件跳过（列表必须 per_page=100——默认只回 20 条，
+          #    超出部分会被重复上传；圣手码头 v0.3.0 曾因此产生 23 个重复附件）
+          # Gitee 附件名支持中文：上传前把 ShengShouBianJiQi 前缀换成显示名「圣手编辑器」
+          EXISTING=$(curl -sf "https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}/releases/${RELEASE_ID}/attach_files?access_token=${GITEE_TOKEN}&per_page=100" | jq -r '.[].browser_download_url' | xargs -r -n1 basename || true)
+          for f in dist/*; do
+            BASE=$(basename "$f")
+            NAME="圣手编辑器${BASE#ShengShouBianJiQi}"
+            if [ "$NAME" != "$BASE" ]; then mv "$f" "dist/$NAME"; f="dist/$NAME"; fi
+            if echo "$EXISTING" | grep -qx "$NAME"; then
+              echo "skip existing: $NAME"; continue
+            fi
+            # 大文件（>50MB）从 US runner 跨境上传 Gitee 实测不可行
+            # （80MB+ dmg 卡数小时 0%）——跳过并提示本地兜底。
+            SIZE_MB=$(du -m "$f" | cut -f1)
+            if [ "$SIZE_MB" -gt 50 ]; then
+              echo "::notice::$NAME is ${SIZE_MB}MB — too large for cross-border upload; sync it locally via scripts/sync-gitee-release.sh"
+              continue
+            fi
+            for i in 1 2 3 4 5 6; do
+              echo "upload $NAME (attempt $i)..."
+              if curl -fS --connect-timeout 20 --max-time 3600 \
+                   -X POST "${API}/releases/${RELEASE_ID}/attach_files?access_token=${GITEE_TOKEN}" \
+                   -F "file=@${f}" 2>curl_err.txt; then
+                echo "uploaded: $NAME"; break
+              fi
+              echo "attempt $i failed:"; tail -3 curl_err.txt
+              [ "$i" = 6 ] && echo "::error::failed to upload $NAME to Gitee"
+              sleep 30
+            done
+          done

@@ -1,10 +1,12 @@
 import React, { useEffect } from "react";
 import MainLayout from "@/components/Layout/MainLayout";
+import UpdateBanner from "@/components/Update/UpdateBanner";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTabStore } from "@/store/tabStore";
 import { useEditorStore } from "@/store/editorStore";
+import { useUpdateStore } from "@/store/updateStore";
 import { detectLanguageFromExtension } from "@/utils/encoding";
 import { classifyFileExtension } from "@/utils/quarantine";
 import { toast } from "@/utils/toast";
@@ -17,11 +19,13 @@ export default function App() {
   const addTab = useTabStore((s) => s.addTab);
   const addOpenFolder = useEditorStore((s) => s.addOpenFolder);
   const openSidebarView = useEditorStore((s) => s.openSidebarView);
+  const startAutoCheck = useUpdateStore((s) => s.startAutoCheck);
 
   useEffect(() => {
     // 加载设置和便签数据
     loadSettings();
     hydrate(); // 恢复上次的便签
+    startAutoCheck(); // 更新检查的定时调度（8s 后首查 + 每 60 分钟，store 内部防重复）
   }, []);
 
   // 监听从 Finder / 右键打开方式 启动应用时传入的文件
@@ -145,5 +149,11 @@ export default function App() {
   useKeyboard();
   useAutoSave();
 
-  return <MainLayout />;
+  return (
+    <>
+      <MainLayout />
+      {/* 应用内更新横幅：发现新版本 / 下载进度 / 待重启 / 手动检查出错 */}
+      <UpdateBanner />
+    </>
+  );
 }
