@@ -10,6 +10,10 @@ interface SettingsStore extends AppSettings {
 
 const DEFAULTS: AppSettings = {
   theme: "light",
+  skin: "default",
+  backgroundImage: "",
+  backgroundDim: 0.45,
+  backgroundBlur: 0,
   fontSize: 14,
   fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', Menlo, Monaco, Consolas, monospace",
   lineHeight: 1.6,
@@ -31,6 +35,12 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     if (key === "theme") {
       applyTheme(value as string);
     }
+    if (key === "skin") {
+      applySkin(value as string, get().accentColor);
+    }
+    if (key === "backgroundImage") {
+      applyBackgroundImage(value as string);
+    }
     if (key === "accentColor") {
       applyAccentColor(value as string);
     }
@@ -43,6 +53,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   resetDefaults: () => {
     set(DEFAULTS);
     applyTheme(DEFAULTS.theme);
+    applySkin(DEFAULTS.skin, DEFAULTS.accentColor);
+    applyBackgroundImage(DEFAULTS.backgroundImage);
     applyAccentColor(DEFAULTS.accentColor);
     applyWindowOpacity(DEFAULTS.windowOpacity);
     get().saveSettings();
@@ -60,6 +72,8 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         const parsed = JSON.parse(saved);
         set({ ...DEFAULTS, ...parsed });
         applyTheme(parsed.theme || DEFAULTS.theme);
+        applySkin(parsed.skin || DEFAULTS.skin, parsed.accentColor || DEFAULTS.accentColor);
+        applyBackgroundImage(parsed.backgroundImage || DEFAULTS.backgroundImage);
         applyAccentColor(parsed.accentColor || DEFAULTS.accentColor);
         applyWindowOpacity(parsed.windowOpacity ?? DEFAULTS.windowOpacity);
       } else {
@@ -75,6 +89,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       const state = get();
       const settings: AppSettings = {
         theme: state.theme,
+        skin: state.skin,
+        backgroundImage: state.backgroundImage,
+        backgroundDim: state.backgroundDim,
+        backgroundBlur: state.backgroundBlur,
         fontSize: state.fontSize,
         fontFamily: state.fontFamily,
         lineHeight: state.lineHeight,
@@ -153,6 +171,26 @@ function darkenHex(hex: string, amount: number): string {
   const dim = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount))));
   const toHex = (v: number) => v.toString(16).padStart(2, "0");
   return "#" + toHex(dim(r)) + toHex(dim(g)) + toHex(dim(b));
+}
+
+// 皮肤：在 documentElement 上挂 class（与 .dark 同机制）；少女粉皮肤接管强调色，
+// 清掉 applyAccentColor 写的内联变量，让 .skin-pink 的 token 生效；切回默认时恢复用户强调色
+function applySkin(skin: string, accentColor: string) {
+  const root = document.documentElement;
+  root.classList.toggle("skin-pink", skin === "pink");
+  if (skin === "pink") {
+    root.style.removeProperty("--accent");
+    root.style.removeProperty("--accent-hover");
+    root.style.removeProperty("--selection");
+    root.style.removeProperty("--accent-glow");
+  } else {
+    applyAccentColor(accentColor);
+  }
+}
+
+// 背景图：挂 class 让 html/body/#root 透出 BackgroundLayer（CSS 规则见 index.css）
+function applyBackgroundImage(path: string) {
+  document.documentElement.classList.toggle("has-bg-image", !!path);
 }
 
 function applyWindowOpacity(opacity: number) {

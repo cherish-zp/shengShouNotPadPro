@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { UpdatePhase } from "@/utils/updateLogic";
 import {
+  classifyUpdateError,
   computeProgress,
   decideCheckPhase,
   getIgnoredVersion,
@@ -93,7 +94,7 @@ async function runCheck(
       // 静默检查失败（如还没发布 latest.json）：回到 idle，不打扰用户
       set({ phase: "idle", error: null });
     } else {
-      set({ phase: "error", error: String(e) });
+      set({ phase: "error", error: classifyUpdateError(e) });
     }
     return silent ? "idle" : "error";
   }
@@ -145,7 +146,7 @@ export const useUpdateStore = create<UpdateStore>((set, get) => ({
       });
       set({ phase: "ready" });
     } catch (e) {
-      set({ phase: "error", error: String(e) });
+      set({ phase: "error", error: classifyUpdateError(e) });
     }
   },
 

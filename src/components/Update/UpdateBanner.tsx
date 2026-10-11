@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { ArrowDownToLine, RefreshCw, X } from "lucide-react";
 import { useUpdateStore } from "@/store/updateStore";
+import { classifyUpdateError } from "@/utils/updateLogic";
 
 /**
  * 底部悬浮更新横幅：
@@ -83,7 +84,7 @@ export default function UpdateBanner() {
     return (
       <div style={container}>
         <span style={{ fontSize: 13, color: "var(--error, #ff3b30)", flex: 1, minWidth: 0 }}>
-          检查更新失败：{error}
+          检查更新失败：{classifyUpdateError(error)}
         </span>
         <button
           onClick={dismissError}

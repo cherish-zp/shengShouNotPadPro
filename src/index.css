@@ -554,3 +554,146 @@ input:focus, textarea:focus, select:focus {
   color: var(--text-secondary);
   letter-spacing: -0.005em;
 }
+
+/* ═══ 少女粉皮肤 Sakura Pink Skin ═══ */
+/* 樱花奶油风：挂在 documentElement 的 .skin-pink（settingsStore 控制）。
+   浅色在前、深色 .skin-pink.dark 在后；与 .dark 双挂时深色规则赢。 */
+
+.skin-pink {
+  /* ── 基础色：樱花白底 + 粉调半透明表面 ── */
+  --bg-primary: #FFF6F9; /* 樱花白：全局底色，比冷白多一分奶粉感 */
+  --bg-secondary: rgba(255, 244, 249, 0.75); /* 次级面板：白中透粉 */
+  --bg-tertiary: rgba(255, 238, 246, 0.55); /* 三级面板：更透更粉，用于内嵌区域 */
+  --bg-surface: rgba(255, 247, 250, 0.8); /* 卡片表面：奶白半透明，浮于粉底之上 */
+  --bg-hover: rgba(255, 126, 173, 0.08); /* hover：一抹淡樱粉而非灰黑 */
+  --bg-active: rgba(255, 126, 173, 0.15); /* active：粉再深一档，按下有回应感 */
+
+  /* ── 文字：暖梅色（棕红调，不用纯黑） ── */
+  --text-primary: rgba(92, 36, 58, 0.94); /* 主文字：暖梅棕红，柔而不刺，对比充足 */
+  --text-secondary: rgba(92, 36, 58, 0.58); /* 次要文字：梅色减淡 */
+  --text-tertiary: rgba(92, 36, 58, 0.36); /* 辅助文字：占位符、行号用 */
+
+  /* ── 强调：樱花粉 ── */
+  --accent: #FF7EAD; /* 樱花粉主色 */
+  --accent-hover: #F25D9A; /* hover 深一档，保持同色相 */
+  --accent-soft: rgba(255, 126, 173, 0.14); /* 强调底：半透明粉，用于选中底/聚焦圈 */
+  --accent-glow: 0 0 20px rgba(255, 126, 173, 0.4); /* 光标粉色光晕 */
+  --selection: rgba(255, 126, 173, 0.22); /* 选区：粉纱蒙层 */
+
+  /* ── 状态色：马卡龙四件套 ── */
+  --success: #34D399; /* 薄荷绿：成功 */
+  --error: #FF6B8A; /* 玫瑰红：错误，与强调粉同族但偏红 */
+  --warning: #FF9F43; /* 蜜橘：警告 */
+  --purple: #A78BFA; /* 柔紫马卡龙 */
+  --pink: #FF6FA5; /* 品牌粉：标签/徽标用 */
+  --teal: #4ECDC4; /* 湖水绿马卡龙 */
+
+  /* ── 边框：粉调半透明，勾边不抢戏 ── */
+  --border: rgba(255, 111, 161, 0.14);
+  --border-strong: rgba(255, 111, 161, 0.26);
+  --divider: rgba(255, 111, 161, 0.1);
+
+  /* ── 毛玻璃：樱花奶白玻璃（工具栏/侧栏/状态栏成套） ── */
+  --glass-bg: rgba(255, 244, 249, 0.66); /* 常规玻璃：樱花奶白 */
+  --glass-bg-strong: rgba(255, 250, 252, 0.86); /* 强玻璃：菜单/浮层，更实更白 */
+  --glass-bg-subtle: rgba(255, 238, 246, 0.45); /* 弱玻璃：轻纱质感 */
+  --glass-blur: blur(24px) saturate(1.8); /* 模糊不变，粉底透过即成粉玻璃 */
+  --glass-border: 0.5px solid rgba(255, 255, 255, 0.9); /* 玻璃上缘高光：奶白描边 */
+  --glass-border-bottom: 0.5px solid rgba(255, 141, 177, 0.2); /* 玻璃下缘：粉调收边 */
+
+  /* ── 阴影：粉调柔影（层级越高影越浓，主档 0.16~0.25） ── */
+  --shadow-xs: 0 0.5px 1px rgba(255, 111, 161, 0.1);
+  --shadow-sm: 0 1px 3px rgba(255, 111, 161, 0.12), 0 0.5px 1px rgba(255, 111, 161, 0.08);
+  --shadow-md: 0 4px 16px rgba(255, 111, 161, 0.16), 0 1px 4px rgba(255, 111, 161, 0.08);
+  --shadow-lg: 0 12px 40px rgba(255, 111, 161, 0.2), 0 4px 12px rgba(255, 111, 161, 0.1);
+  --shadow-xl: 0 24px 80px rgba(255, 111, 161, 0.24), 0 8px 24px rgba(255, 111, 161, 0.12);
+  --shadow-window: 0 24px 80px rgba(255, 111, 161, 0.25), 0 8px 24px rgba(255, 111, 161, 0.12);
+
+  /* ── 滚动条：粉玉小圆条 ── */
+  --scrollbar-thumb: rgba(255, 126, 173, 0.35);
+  --scrollbar-thumb-hover: rgba(255, 126, 173, 0.55);
+
+  /* ── 编辑区 ── */
+  --gutter-bg: rgba(255, 238, 246, 0.6); /* 行号槽：淡粉纱 */
+  --active-line: rgba(255, 126, 173, 0.06); /* 当前行：极淡粉高亮 */
+
+  /* ── 圆角：整体 +2px，更圆润少女感（--radius-full 保持 999px 不动） ── */
+  --radius-xs: 8px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+}
+
+/* ── 粉夜：粉皮 × 深色模式（必须写在 .skin-pink 之后，双挂时以此为准） ── */
+.skin-pink.dark {
+  /* ── 基础色：深梅紫底 ── */
+  --bg-primary: #221822; /* 深梅紫：全局底色，黑中带梅 */
+  --bg-secondary: rgba(42, 30, 42, 0.72); /* 次级面板：梅紫半透明 */
+  --bg-tertiary: rgba(52, 38, 52, 0.55); /* 三级面板：略亮一档 */
+  --bg-surface: rgba(38, 27, 38, 0.8); /* 卡片表面：深梅紫半透明 */
+  --bg-hover: rgba(255, 143, 184, 0.1); /* hover：夜樱粉微光 */
+  --bg-active: rgba(255, 143, 184, 0.16); /* active：粉光更亮 */
+
+  /* ── 文字：玫瑰粉白 ── */
+  --text-primary: rgba(255, 233, 241, 0.94); /* 主文字：粉白，深底上清晰柔和 */
+  --text-secondary: rgba(255, 214, 228, 0.6); /* 次要文字：淡玫瑰 */
+  --text-tertiary: rgba(255, 214, 228, 0.36); /* 辅助文字：更暗的玫瑰 */
+
+  /* ── 强调：夜樱粉（亮一档保证深底可读） ── */
+  --accent: #FF8FB8; /* 夜樱粉主色 */
+  --accent-hover: #FFA9C9; /* 深色里 hover 提亮而非压暗 */
+  --accent-soft: rgba(255, 143, 184, 0.18); /* 强调底：夜粉半透明 */
+  --accent-glow: 0 0 24px rgba(255, 143, 184, 0.45); /* 粉色光晕在夜里更明显 */
+  --selection: rgba(255, 143, 184, 0.3); /* 选区：夜粉蒙层 */
+
+  /* ── 状态色：夜色马卡龙（整体提亮） ── */
+  --success: #4ADE9E; /* 夜薄荷 */
+  --error: #FF7A96; /* 夜玫瑰 */
+  --warning: #FFB05C; /* 夜蜜橘 */
+  --purple: #C4A0FF; /* 夜紫丁香 */
+  --pink: #FF8FB8; /* 夜樱粉 */
+  --teal: #6ADBE0; /* 夜湖水 */
+
+  /* ── 边框：玫粉半透明 ── */
+  --border: rgba(255, 143, 184, 0.14);
+  --border-strong: rgba(255, 143, 184, 0.26);
+  --divider: rgba(255, 143, 184, 0.1);
+
+  /* ── 毛玻璃：深梅紫玻璃 ── */
+  --glass-bg: rgba(42, 30, 42, 0.65); /* 常规玻璃：深梅紫 */
+  --glass-bg-strong: rgba(48, 34, 48, 0.84); /* 强玻璃：浮层菜单 */
+  --glass-bg-subtle: rgba(42, 30, 42, 0.42); /* 弱玻璃：夜纱 */
+  --glass-blur: blur(24px) saturate(1.6); /* 与默认深色一致的模糊强度 */
+  --glass-border: 0.5px solid rgba(255, 175, 200, 0.16); /* 上缘：玫瑰高光 */
+  --glass-border-bottom: 0.5px solid rgba(255, 175, 200, 0.1); /* 下缘：更淡收边 */
+
+  /* ── 阴影：墨紫影 + 一点粉晕（深底仍保有分离度） ── */
+  --shadow-xs: 0 0.5px 1px rgba(8, 3, 8, 0.4);
+  --shadow-sm: 0 1px 3px rgba(8, 3, 8, 0.5), 0 0.5px 1px rgba(8, 3, 8, 0.3);
+  --shadow-md: 0 4px 16px rgba(8, 3, 8, 0.55), 0 1px 4px rgba(255, 111, 161, 0.1);
+  --shadow-lg: 0 12px 40px rgba(8, 3, 8, 0.65), 0 4px 12px rgba(255, 111, 161, 0.12);
+  --shadow-xl: 0 24px 80px rgba(8, 3, 8, 0.75), 0 8px 24px rgba(255, 111, 161, 0.14);
+  --shadow-window: 0 32px 100px rgba(8, 3, 8, 0.8), 0 8px 24px rgba(255, 111, 161, 0.12);
+
+  /* ── 滚动条 ── */
+  --scrollbar-thumb: rgba(255, 143, 184, 0.28);
+  --scrollbar-thumb-hover: rgba(255, 143, 184, 0.45);
+
+  /* ── 编辑区 ── */
+  --gutter-bg: rgba(38, 27, 38, 0.6); /* 行号槽：深梅紫纱 */
+  --active-line: rgba(255, 143, 184, 0.06); /* 当前行：夜粉微光 */
+
+  /* 圆角与颜色无关，沿用 .skin-pink 的声明，不重复 */
+}
+
+/* ═══ 背景图模式 ═══ */
+/* html 挂 .has-bg-image 后，让 html/body/#root 的不透明底透出
+   fixed 定位的 BackgroundLayer 背景图层。 */
+
+html.has-bg-image,
+html.has-bg-image body,
+html.has-bg-image #root {
+  background: transparent;
+}

@@ -3,8 +3,9 @@ import Modal from "@/components/Common/Modal";
 import { useEditorStore } from "@/store/editorStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useUpdateStore } from "@/store/updateStore";
+import { pickBackgroundImage } from "@/utils/background";
 import { ACCENT_PRESETS } from "@/utils/themes";
-import { isTauriEnvironment } from "@/utils/updateLogic";
+import { classifyUpdateError, isTauriEnvironment } from "@/utils/updateLogic";
 
 type SettingsTab = "general" | "editor" | "theme" | "keybindings" | "about";
 
@@ -21,6 +22,22 @@ export default function SettingsPanel() {
   const setOpen = useEditorStore((s) => s.setSettingsOpen);
   const settings = useSettingsStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+
+  // 外观 tab 内的小按钮（选择图片 / 清除），风格与「检查更新」等按钮一致
+  const rowBtn: React.CSSProperties = {
+    padding: "6px 14px",
+    borderRadius: 8,
+    fontSize: 13,
+    cursor: "pointer",
+    border: "1px solid var(--border)",
+    background: "var(--bg-hover)",
+    color: "var(--text-primary)",
+    whiteSpace: "nowrap",
+  };
+  const handlePickBackground = async () => {
+    const p = await pickBackgroundImage();
+    if (p) settings.updateSetting("backgroundImage", p);
+  };
 
   if (!isOpen) return null;
 
@@ -122,6 +139,67 @@ export default function SettingsPanel() {
                   ))}
                 </div>
               </SettingRow>
+              <SettingRow label="界面皮肤">
+                <div style={{ display: "flex", gap: 8 }}>
+                  {(["default", "pink"] as const).map((sk) => (
+                    <button key={sk} onClick={() => settings.updateSetting("skin", sk)}
+                      style={{
+                        padding: "6px 16px", borderRadius: 8, fontSize: 13,
+                        background: settings.skin === sk ? "var(--accent)" : "var(--bg-hover)",
+                        color: settings.skin === sk ? "var(--bg-primary)" : "var(--text-primary)",
+                        cursor: "pointer",
+                      }}>
+                      {{ default: "默认", pink: "少女粉 🌸" }[sk]}
+                    </button>
+                  ))}
+                </div>
+              </SettingRow>
+              <SettingRow label="背景图片">
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <button onClick={() => void handlePickBackground()} style={rowBtn}>选择图片</button>
+                  {settings.backgroundImage && (
+                    <>
+                      <span
+                        title={settings.backgroundImage}
+                        style={{ maxWidth: 140, fontSize: 12, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      >
+                        {settings.backgroundImage.split(/[\\/]/).pop()}
+                      </span>
+                      <button onClick={() => settings.updateSetting("backgroundImage", "")} style={rowBtn}>清除</button>
+                    </>
+                  )}
+                </div>
+              </SettingRow>
+              {settings.backgroundImage && (
+                <>
+                  <SettingRow label="图片遮罩">
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        type="range" min={0} max={100} step={5}
+                        value={Math.round(settings.backgroundDim * 100)}
+                        onChange={(e) => settings.updateSetting("backgroundDim", parseInt(e.target.value) / 100)}
+                        style={{ width: 200 }}
+                      />
+                      <span style={{ fontSize: 12, color: "var(--text-secondary)", minWidth: 36 }}>
+                        {Math.round(settings.backgroundDim * 100)}%
+                      </span>
+                    </div>
+                  </SettingRow>
+                  <SettingRow label="背景模糊">
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        type="range" min={0} max={30} step={1}
+                        value={settings.backgroundBlur}
+                        onChange={(e) => settings.updateSetting("backgroundBlur", parseInt(e.target.value))}
+                        style={{ width: 200 }}
+                      />
+                      <span style={{ fontSize: 12, color: "var(--text-secondary)", minWidth: 36 }}>
+                        {settings.backgroundBlur}px
+                      </span>
+                    </div>
+                  </SettingRow>
+                </>
+              )}
               <SettingRow label="强调色">
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", maxWidth: 280 }}>
                   {ACCENT_PRESETS.map((preset) => {
@@ -275,7 +353,7 @@ function AboutTab() {
       </SettingRow>
       {phase === "error" && error && (
         <div style={{ fontSize: 12, color: "var(--error, #ff3b30)", wordBreak: "break-all" }}>
-          {error}
+          {classifyUpdateError(error)}
         </div>
       )}
       <SettingRow label="操作">

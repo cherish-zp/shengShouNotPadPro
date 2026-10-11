@@ -106,8 +106,14 @@ export interface Command {
   icon?: string;
 }
 
+export type SkinId = "default" | "pink";
+
 export interface AppSettings {
   theme: "dark" | "light" | "system";
+  skin: SkinId;
+  backgroundImage: string;
+  backgroundDim: number;
+  backgroundBlur: number;
   fontSize: number;
   fontFamily: string;
   lineHeight: number;

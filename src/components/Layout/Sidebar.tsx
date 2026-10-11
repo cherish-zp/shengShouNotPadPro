@@ -1,6 +1,7 @@
 import React from "react";
 import { Search, Wrench, Puzzle, Settings, StickyNote, FolderOpen } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
+import { useSettingsStore } from "@/store/settingsStore";
 import { RAIL_VIEWS, resolvePanelView, type RailViewId } from "@/utils/sidebarState";
 import NotesPanel, { FileTreePanel } from "@/components/FileTree/FilePanel";
 import GlobalSearch from "@/components/Search/GlobalSearch";
@@ -137,6 +138,7 @@ export function SidebarRail() {
 /** 水晶侧边栏内容面板 */
 export function SidebarContent() {
   const panel = resolvePanelView(useEditorStore((s) => s.activeSidebarView));
+  const hasImage = !!useSettingsStore((s) => s.backgroundImage);
 
   return (
     <div
@@ -146,7 +148,9 @@ export function SidebarContent() {
         display: "flex",
         flexDirection: "column",
         minWidth: 0,
-        background: "var(--bg-primary)",
+        background: hasImage ? "var(--glass-bg)" : "var(--bg-primary)",
+        WebkitBackdropFilter: hasImage ? "var(--glass-blur)" : undefined,
+        backdropFilter: hasImage ? "var(--glass-blur)" : undefined,
         borderRight: "0.5px solid var(--border)",
       }}
     >

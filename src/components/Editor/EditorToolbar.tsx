@@ -1,6 +1,7 @@
 import React from "react";
 import { Save, Minus, Plus, Eye, EyeOff, WrapText } from "lucide-react";
 import Dropdown from "@/components/Common/Dropdown";
+import UpdateButton from "@/components/Update/UpdateButton";
 import { useTabStore } from "@/store/tabStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useEditorStore } from "@/store/editorStore";
@@ -236,6 +237,9 @@ export default function EditorToolbar({ tabId }: EditorToolbarProps) {
           <Save size={14} />
         </button>
       )}
+
+      {/* 检查更新（窗口右上角，Codex 风格圆形图标按钮） */}
+      <UpdateButton />
     </div>
   );
 }

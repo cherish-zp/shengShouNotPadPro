@@ -2,6 +2,7 @@ import React from "react";
 import { FileText, Plus, Upload } from "lucide-react";
 import { useTabStore } from "@/store/tabStore";
 import { useEditorStore } from "@/store/editorStore";
+import { useSettingsStore } from "@/store/settingsStore";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import CodeEditor from "./CodeEditor";
 import MarkdownPreview from "./MarkdownPreview";
@@ -12,6 +13,7 @@ export default function EditorContainer() {
   const activeTab = useTabStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const addTab = useTabStore((s) => s.addTab);
   const markdownPreviewVisible = useEditorStore((s) => s.markdownPreviewVisible);
+  const hasImage = !!useSettingsStore((s) => s.backgroundImage);
   const { isDragging } = useFileDrop();
 
   const isMarkdown = activeTab?.language === "markdown";
@@ -43,7 +45,7 @@ export default function EditorContainer() {
           position: "relative",
           flex: 1, display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center", gap: 24,
-          background: "var(--bg-primary)", color: "var(--text-secondary)",
+          background: hasImage ? "transparent" : "var(--bg-primary)", color: "var(--text-secondary)",
         }}
       >
         <FileText size={64} style={{ opacity: 0.2 }} />

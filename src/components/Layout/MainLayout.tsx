@@ -1,8 +1,11 @@
 import React, { useState } from "react";
 import { useEditorStore } from "@/store/editorStore";
 import { useTabStore } from "@/store/tabStore";
+import { useSettingsStore } from "@/store/settingsStore";
+import { backgroundToCssUrl } from "@/utils/background";
 import { SidebarRail, SidebarContent } from "./Sidebar";
 import StatusBar from "./StatusBar";
+import BackgroundLayer from "./BackgroundLayer";
 import EditorContainer from "@/components/Editor/EditorContainer";
 import EditorToolbar from "@/components/Editor/EditorToolbar";
 import FindReplace from "@/components/Search/FindReplace";
@@ -20,6 +23,11 @@ export default function MainLayout() {
   const goToLineOpen = useEditorStore((s) => s.goToLineOpen);
   const diffViewOpen = useEditorStore((s) => s.diffViewOpen);
   const activeTabId = useTabStore((s) => s.activeTabId);
+  const skin = useSettingsStore((s) => s.skin);
+  const backgroundImage = useSettingsStore((s) => s.backgroundImage);
+  const backgroundDim = useSettingsStore((s) => s.backgroundDim);
+  const backgroundBlur = useSettingsStore((s) => s.backgroundBlur);
+  const hasImage = !!backgroundImage;
   const [sidebarWidth, setSidebarWidth] = useState(300);
   const [isResizing, setIsResizing] = useState(false);
 
@@ -45,7 +53,11 @@ export default function MainLayout() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", width: "100vw", height: "100vh", overflow: "hidden", background: "var(--bg-primary)" }}>
+    <div style={{ display: "flex", flexDirection: "column", width: "100vw", height: "100vh", overflow: "hidden", background: hasImage ? "transparent" : skin === "pink" ? "linear-gradient(168deg, #FFF7FA 0%, #FFE9F2 55%, #FFDFEA 100%)" : "var(--bg-primary)" }}>
+      {/* 图片背景层：fixed 全屏，位于内容之下，仅设置了背景图时渲染 */}
+      {hasImage && (
+        <BackgroundLayer url={backgroundToCssUrl(backgroundImage)} dim={backgroundDim} blur={backgroundBlur} />
+      )}
       <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}>
         {/* 固定左侧图标栏：始终可见 */}
         <SidebarRail />

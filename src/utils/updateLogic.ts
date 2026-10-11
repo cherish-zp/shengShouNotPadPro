@@ -72,3 +72,49 @@ export function isTauriEnvironment(): boolean {
     return false;
   }
 }
+
+/** 把 updater 插件的原始错误转译成用户能看懂的中文提示；未知错误原样返回（去掉可能的前缀噪音） */
+export function classifyUpdateError(e: unknown): string {
+  const raw = String(e);
+  const lowered = raw.toLowerCase();
+
+  // 1) 两个更新端点都没有 latest.json（ReleaseNotFound）——典型场景：新版本尚未发布。
+  //    必须先于网络类判断：报错原文里同样含 "fetch"/"connection" 等词。
+  if (
+    lowered.includes("could not fetch a valid release json") ||
+    lowered.includes("releasenotfound")
+  ) {
+    return "更新服务器暂未提供新版本（可能仍在发布流程中），请稍后再试";
+  }
+  // 2) 网络类：连接、DNS、超时、URL 非法等
+  if (
+    lowered.includes("network") ||
+    lowered.includes("fetch") ||
+    lowered.includes("timed out") ||
+    lowered.includes("timeout") ||
+    lowered.includes("dns") ||
+    lowered.includes("connection") ||
+    lowered.includes("url error")
+  ) {
+    return "网络连接失败，请检查网络后重试";
+  }
+  // 3) 签名校验失败
+  if (
+    lowered.includes("signature") ||
+    lowered.includes("public key") ||
+    lowered.includes("invalid key")
+  ) {
+    return "更新包签名校验失败，为保证安全已中止更新";
+  }
+  // 4) 权限不足
+  if (
+    lowered.includes("permission") ||
+    lowered.includes("not allowed") ||
+    lowered.includes("forbidden")
+  ) {
+    return "没有权限执行更新操作";
+  }
+  // 5) 未知错误：原样返回（空串视为未知）
+  if (raw.trim() === "") return "未知错误";
+  return raw;
+}
