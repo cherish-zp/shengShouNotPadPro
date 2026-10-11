@@ -22,7 +22,7 @@ permissions:
 jobs:
   sync:
     name: Sync ${{ inputs.tag }} assets to Gitee
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # 钉死版本，与 build.yml 一致
     env:
       GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
       GITEE_OWNER: princess-zp
@@ -52,8 +52,9 @@ jobs:
               '{tag_name: $tag, name: ("圣手编辑器 " + $tag), body: $body, prerelease: false, target_commitish: "main"}')
             RELEASE_ID=$(curl -sf --connect-timeout 20 -X POST "${API}/releases?access_token=${GITEE_TOKEN}" \
               -H 'Content-Type: application/json' -d "$PAYLOAD" | jq -r '.id') || true
-            if [ -z "${RELEASE_ID}" ]; then
-              echo "::error::failed to create Gitee release (check GITEE_TOKEN permissions: projects)"
+              if [ -z "${RELEASE_ID}" ]; then
+              echo "::error::failed to create Gitee release——通常是 GITEE_TOKEN 过期或缺少 projects 权限"
+              echo "::error::修复：Gitee → 设置 → 私人令牌 重新生成（勾选 projects）→ 更新 GitHub secret GITEE_TOKEN → 重跑本工作流"
               exit 1
             fi
           fi

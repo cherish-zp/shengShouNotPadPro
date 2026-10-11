@@ -3,6 +3,7 @@
 #
 # 用法：
 #   GITEE_TOKEN=<gitee私人令牌> ./scripts/sync-gitee-release.sh v0.2.0
+#   （或把令牌写入 ~/.gitee-token 文件——一行纯文本，脚本自动读取）
 #
 # 前置：本机有 curl、python3（无需 gh/jq）。
 # 为什么需要本地跑：Gitee 附件从 GitHub Actions（US runner）跨境上传
@@ -18,7 +19,13 @@
 set -euo pipefail
 
 TAG="${1:?usage: GITEE_TOKEN=... $0 v0.2.0}"
-GITEE_TOKEN="${GITEE_TOKEN:?GITEE_TOKEN is required}"
+# 令牌来源：环境变量 GITEE_TOKEN 优先，其次 ~/.gitee-token 文件（一行纯文本）
+GITEE_TOKEN="${GITEE_TOKEN:-$(tr -d '[:space:]' < "${GITEE_TOKEN_FILE:-$HOME/.gitee-token}" 2>/dev/null || true)}"
+if [ -z "${GITEE_TOKEN}" ]; then
+  echo "ERROR: 缺少 Gitee 令牌。设置环境变量 GITEE_TOKEN=... 或把令牌写入 ~/.gitee-token" >&2
+  echo "       令牌在 gitee.com → 设置 → 私人令牌 生成，必须勾选 projects 权限" >&2
+  exit 1
+fi
 GITHUB_REPO="${GITHUB_REPO:-cherish-zp/shengShouNotPadPro}"
 GITEE_OWNER="${GITEE_OWNER:-princess-zp}"
 GITEE_REPO="${GITEE_REPO:-shengShouNotPadPro}"

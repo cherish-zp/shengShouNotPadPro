@@ -330,7 +330,7 @@ jobs:
     name: Assemble updater manifest
     needs: [build]
     if: ${{ !cancelled() && needs.build.result != 'failure' && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # 钉死版本：ubuntu-latest 2026-10-19 起迁移 Ubuntu 26，避免清单组装环境漂移
     permissions:
       contents: write
     env:
@@ -476,7 +476,7 @@ jobs:
     name: Sync release to Gitee
     needs: [build, assemble-updater-json]
     if: ${{ !cancelled() && needs.build.result != 'failure' && needs.assemble-updater-json.result != 'failure' && (github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # 钉死版本，与 assemble 一致
     permissions:
       contents: read
     env:
@@ -512,8 +512,9 @@ jobs:
               '{tag_name: $tag, name: ("圣手编辑器 " + $tag), body: $body, prerelease: false, target_commitish: "main"}')
             RELEASE_ID=$(curl -sf --connect-timeout 20 -X POST "${API}/releases?access_token=${GITEE_TOKEN}" \
               -H 'Content-Type: application/json' -d "$PAYLOAD" | jq -r '.id') || true
-            if [ -z "${RELEASE_ID}" ]; then
-              echo "::error::failed to create Gitee release (check GITEE_TOKEN permissions: projects)"
+              if [ -z "${RELEASE_ID}" ]; then
+              echo "::error::failed to create Gitee release——通常是 GITEE_TOKEN 过期或缺少 projects 权限"
+              echo "::error::修复：Gitee → 设置 → 私人令牌 重新生成（勾选 projects）→ 更新 GitHub secret GITEE_TOKEN → Actions 手动运行 build 工作流并填 tag（仅重跑同步，不重新构建）"
               exit 1
             fi
           fi

@@ -5,6 +5,16 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本 2.0.0](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### Changed
+- CI：`assemble-updater-json` 与 `sync-gitee` 两个 job 的 runner 钉到 ubuntu-24.04
+  （ubuntu-latest 将于 2026-10-19 起迁移 Ubuntu 26，避免清单组装环境漂移）。
+- Gitee 同步失败的报错改为可操作指引（令牌过期 / 缺 projects 权限时给出具体修复步骤）。
+- 本地同步脚本 `sync-gitee-release.sh` 支持从 `~/.gitee-token` 读取令牌（环境变量优先）。
+- CI 密钥归一化步骤兼容 Windows runner（stdout 强制 UTF-8，修复中文诊断输出崩溃），
+  失败时打印收到内容的长度 / 行数 / 开头，并专门识别「贴成公钥」「读到空值」。
+
 ## [0.2.1] - 2026-10-11
 
 ### Added
