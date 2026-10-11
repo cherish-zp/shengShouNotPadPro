@@ -139,21 +139,26 @@ jobs:
           SECRET_B64: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           KEY_OUT: ${{ runner.temp }}/updater-signing.key
         run: |
-          # tauri's TAURI_SIGNING_PRIVATE_KEY (string form) accepts ONLY the
-          # single-line base64 of the minisign key (= content of the .key file).
-          # Secret may be that base64 or the raw key file — normalize here.
-          # KEY_OUT uses $RUNNER_TEMP: a path ALL processes on the runner
-          # (bash, python3, node) resolve identically — /tmp does NOT (a Git
-          # Bash virtual path invisible to native Windows processes; this
-          # exact mismatch failed the Windows job in 圣手码头 v0.3.0).
+          # tauri 的 TAURI_SIGNING_PRIVATE_KEY 只认单行 base64 密钥（.key 文件原文）。
+          # 本步骤把 secret 归一化成该形态，并在失败时打印诊断信息
+          # （长度/行数/开头 6 字符——足以分辨「没收到/贴成公钥/形态未知」，
+          #   不泄露密钥本体）。.key 与 .key.pub 外表都是单行 dW50...，
+          # 极易贴错，故对公钥做专门识别。
+          # KEY_OUT 用 $RUNNER_TEMP：所有进程路径一致（/tmp 在 Windows 的
+          # Git Bash 是虚拟路径，原生进程不可见——圣手码头 v0.3.0 踩过）。
           python3 - << 'PY'
           import base64, os, sys
-          secret = os.environ.get("SECRET_B64", "").strip()
+
+          secret = os.environ.get("SECRET_B64", "")
           out_path = os.environ["KEY_OUT"]
+
+          def shape(tag):
+              lines = [l for l in secret.splitlines() if l.strip()]
+              head = repr(secret.strip()[:6]) + "..." if secret.strip() else "(空)"
+              return f"[诊断] {tag}: 长度={len(secret)} 非空行数={len(lines)} 开头={head}"
+
           def find_key_line(text):
-              # 密钥的真身是单行 base64，解码后以 "untrusted comment" 开头且非公钥；
-              # tauri 的 TAURI_SIGNING_PRIVATE_KEY 只认这一行（圣手编辑器 v0.2.0
-              # 首发实测：喂「注释+密钥」两行结构会在空格处 base64 解码失败）
+              # 密钥真身 = 单行 base64，解码后以 "untrusted comment" 开头且非公钥
               for line in text.splitlines():
                   line = line.strip()
                   if not line or line.startswith("untrusted comment") or line.startswith("-----"):
@@ -165,9 +170,39 @@ jobs:
                   if decoded.startswith(b"untrusted comment") and b"public" not in decoded.split(b"\n", 1)[0]:
                       return line
               return None
-          # 形态1：原文（单行 dW50... / 完整密钥文件文本 / 解码后的两行结构）
+
+          def looks_like_pub(text):
+              # .pub 与 .key 外表相同（都是单行 dW50...），靠解码后的注释区分：
+              # 公钥注释含 "public key"，私钥是 "encrypted secret key"
+              for line in text.splitlines():
+                  line = line.strip()
+                  if not line:
+                      continue
+                  if line.startswith("untrusted comment"):
+                      if "public" in line:
+                          return True
+                      continue
+                  try:
+                      d = base64.b64decode(line)
+                  except Exception:
+                      continue
+                  if d.startswith(b"untrusted comment") and b"public" in d.split(b"\n", 1)[0]:
+                      return True
+              return False
+
+          if not secret.strip():
+              print("::error::" + shape("secret 为空值"))
+              print("::error::最常见原因：secret 名称不精确——Settings → Secrets → Actions 里必须一字不差为 TAURI_SIGNING_PRIVATE_KEY（差一个字符就被当成别的 secret 读成空）；其次确认 Value 已粘贴内容并点了 Update secret")
+              sys.exit(1)
+
+          if looks_like_pub(secret):
+              print("::error::" + shape("公钥 .pub"))
+              print("::error::收到的是 .key.pub 公钥——请粘贴 .key 私钥文件的内容（两者外表一样，靠长度区分：本项目私钥 348 字符、公钥 152 字符）")
+              sys.exit(1)
+
+          # 形态1：原文（单行 dW50... / 完整密钥文件文本）
           cand = find_key_line(secret)
-          # 形态2：secret 本身被 base64 过 1-2 层，先逐层解码再找
+          # 形态2：secret 本身被 base64 包裹过 1-3 层，先逐层解码再找
           work = secret
           for _round in range(3):
               if cand:
@@ -178,18 +213,21 @@ jobs:
                   break
               cand = find_key_line(work)
           if not cand:
-              # 形态3：被展开成「注释行 + 密钥行」的两行结构——整体重新 base64 回单行
+              # 形态3：「注释行 + 密钥行」两行明文——整体重新 base64 回单行
               lines = [l.strip() for l in secret.splitlines() if l.strip()]
-              if len(lines) == 2 and lines[0].startswith("untrusted comment"):
+              if len(lines) == 2 and lines[0].startswith("untrusted comment") and "public" not in lines[0]:
                   re_b64 = base64.b64encode(("\n".join(lines) + "\n").encode()).decode()
                   if base64.b64decode(re_b64).startswith(b"untrusted comment"):
                       cand = re_b64
+
           if not cand:
-              print("::error::TAURI_SIGNING_PRIVATE_KEY 无法归一化：需要 .key 文件的 dW50... 单行内容（或其 base64），请勿填入 .key.pub 公钥")
+              print("::error::" + shape("无法识别的形态"))
+              print("::error::需要 .key 私钥文件内容（单行 dW50... 或两行明文）。请重新 pbcopy < ~/shengshou-keys/shengshoubianjiqi.key 后整行粘贴")
               sys.exit(1)
+
           with open(out_path, "w") as f:
-              f.write(cand)  # 不能补尾换行：tauri 对密钥串做严格 base64 解码，\n 会报 Invalid symbol 10
-          print("updater signing key normalized and verified")
+              f.write(cand)  # 不能补尾换行：tauri 严格 base64 解码，\n 会报 Invalid symbol 10
+          print("updater signing key normalized and verified " + shape("有效私钥"))
           PY
       - name: Build & release
         uses: tauri-apps/tauri-action@v1
