@@ -60,30 +60,10 @@ export interface FileSearchResult {
   matches: SearchMatch[];
 }
 
-export interface DiffLine {
-  type: "added" | "removed" | "neutral";
-  oldLineNum?: number;
-  newLineNum?: number;
-  content: string;
-}
-
 export interface EncodingInfo {
   name: string;
   label: string;
   description: string;
-}
-
-export interface GitStatusEntry {
-  path: string;
-  status: string;
-  staged: boolean;
-}
-
-export interface GitCommit {
-  hash: string;
-  message: string;
-  author: string;
-  date: string;
 }
 
 export interface Plugin {
@@ -125,20 +105,4 @@ export interface AppSettings {
   accentColor: string;
   sidebarWidth: number;
   windowOpacity: number;
-}
-
-export interface FileInfo {
-  name: string;
-  path: string;
-  size: number;
-  isDir: boolean;
-  modified: number;
-  permissions?: string;
-}
-
-export interface DirEntry {
-  name: string;
-  path: string;
-  isDir: boolean;
-  isSymlink: boolean;
 }

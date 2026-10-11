@@ -697,3 +697,58 @@ html.has-bg-image body,
 html.has-bg-image #root {
   background: transparent;
 }
+
+/* ═══════════════════════════════════════════
+   CodeMirror 语法高亮 token
+   ═══════════════════════════════════════════ */
+/* 供 CodeEditor 的 novaHighlight / searchMatch 使用，按语义分类命名（--hl-*）。
+   :root 浅色沿用原先硬编码的值；.dark 整体换成深底高对比亮色（Tailwind 300/400 档），
+   修复暗色模式下变量/注释/括号等对比度不达标的问题（原 #374151、#6b7280 深底上不可读）。
+   皮肤未覆盖 --hl-* 时回落到 :root 浅色值，与原硬编码行为一致。 */
+
+:root {
+  /* ── 语法高亮（浅色） ── */
+  --hl-keyword: #7c3aed; /* 关键字 */
+  --hl-operator: #0ea5e9; /* 运算符 / 函数名 */
+  --hl-special: #ef4444; /* special(variableName)：this、self 等 */
+  --hl-type: #eab308; /* 类型名 / className / meta */
+  --hl-atom: #f97316; /* 原子字面量（null/undefined 等） */
+  --hl-number: #f97316; /* 数字字面量 */
+  --hl-bool: #f97316; /* 布尔字面量 */
+  --hl-definition: #3b82f6; /* 定义处变量名 / 属性名 / 链接 */
+  --hl-string: #22c55e; /* 字符串 */
+  --hl-comment: #9ca3af; /* 注释（斜体） */
+  --hl-variable: #374151; /* 普通变量名 */
+  --hl-tag: #ef4444; /* 标签名 / 正则 */
+  --hl-bracket: #6b7280; /* 括号 */
+  --hl-link: #3b82f6; /* 链接（下划线） */
+  --hl-heading: #ef4444; /* Markdown 标题（加粗） */
+  --hl-search-match: rgba(250, 179, 135, 0.3); /* 搜索命中底色 */
+  --hl-search-match-selected: rgba(250, 179, 135, 0.5); /* 当前搜索命中底色 */
+}
+
+.dark {
+  /* ── 语法高亮（深色：整体提亮，深底对比度 ≥ 4.5:1） ── */
+  --hl-keyword: #c4b5fd;
+  --hl-operator: #7dd3fc;
+  --hl-special: #f87171;
+  --hl-type: #fde047;
+  --hl-atom: #fdba74;
+  --hl-number: #fdba74;
+  --hl-bool: #fdba74;
+  --hl-definition: #93c5fd;
+  --hl-string: #86efac;
+  --hl-comment: #9ca3af;
+  --hl-variable: #d1d5db;
+  --hl-tag: #f87171;
+  --hl-bracket: #9ca3af;
+  --hl-meta: #fde047;
+  --hl-link: #93c5fd;
+  --hl-heading: #f87171;
+  --hl-class: #fde047;
+  --hl-property: #93c5fd;
+  --hl-function: #7dd3fc;
+  --hl-regexp: #f87171;
+  --hl-search-match: rgba(250, 179, 135, 0.35);
+  --hl-search-match-selected: rgba(250, 179, 135, 0.55);
+}

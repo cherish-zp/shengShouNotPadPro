@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import type { AppSettings } from "@/types";
+import { darkenHex, hexToRgb, normalizeHex } from "@/utils/color";
+
+const SETTINGS_KEY = "novaedit-settings";
 
 interface SettingsStore extends AppSettings {
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
@@ -27,6 +30,26 @@ const DEFAULTS: AppSettings = {
   windowOpacity: 1,
 };
 
+// 设置写盘防抖（500ms）：updateSetting 在滑杆拖动时每 tick 触发一次，
+// 全部同步写 localStorage 会造成高频串行化；合并为停止调整后写一次。
+// saveSettings 本身保持同步写（resetDefaults / 退出冲写 / 外部直调不受影响）。
+let settingsSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleSettingsSave() {
+  if (settingsSaveTimer) clearTimeout(settingsSaveTimer);
+  settingsSaveTimer = setTimeout(() => {
+    settingsSaveTimer = null;
+    useSettingsStore.getState().saveSettings();
+  }, 500);
+}
+
+function cancelScheduledSettingsSave() {
+  if (settingsSaveTimer) {
+    clearTimeout(settingsSaveTimer);
+    settingsSaveTimer = null;
+  }
+}
+
 export const useSettingsStore = create<SettingsStore>((set, get) => ({
   ...DEFAULTS,
 
@@ -47,10 +70,13 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
     if (key === "windowOpacity") {
       applyWindowOpacity(value as number);
     }
-    get().saveSettings();
+    // 写盘走防抖：滑杆/选色器拖动每 tick 都会进来，同步写 localStorage 太频繁
+    scheduleSettingsSave();
   },
 
   resetDefaults: () => {
+    // 取消未触发的防抖写入后同步落盘，保持 reset 即时生效的原行为
+    cancelScheduledSettingsSave();
     set(DEFAULTS);
     applyTheme(DEFAULTS.theme);
     applySkin(DEFAULTS.skin, DEFAULTS.accentColor);
@@ -67,7 +93,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         getCurrentWindow().setBackgroundColor("transparent");
       }).catch(() => {});
 
-      const saved = localStorage.getItem("novaedit-settings");
+      const saved = localStorage.getItem(SETTINGS_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         set({ ...DEFAULTS, ...parsed });
@@ -105,12 +131,22 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         sidebarWidth: state.sidebarWidth,
         windowOpacity: state.windowOpacity,
       };
-      localStorage.setItem("novaedit-settings", JSON.stringify(settings));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     } catch {
       // ignore
     }
   },
 }));
+
+// 防抖窗口内退出（关闭窗口/刷新页面）时冲写一次，避免丢掉最后一次调整
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    if (settingsSaveTimer) {
+      cancelScheduledSettingsSave();
+      useSettingsStore.getState().saveSettings();
+    }
+  });
+}
 
 // :root 默认就是冷白，只有深色模式才加 .dark
 function applyTheme(theme: string) {
@@ -130,9 +166,9 @@ function applyTheme(theme: string) {
 // 把强调色写到 CSS 变量上，让全局 var(--accent) / var(--accent-hover) / var(--selection) 跟随
 function applyAccentColor(color: string) {
   if (!color) return;
-  const hex = normalizeHexColor(color);
-  const hover = darkenHex(hex, 0.12);
-  const { r, g, b } = hexToRgbValues(hex);
+  const hex = normalizeHex(color, "#2563eb");
+  const hover = darkenHex(hex, 0.12, "#2563eb");
+  const { r, g, b } = hexToRgb(hex, "#2563eb");
   const root = document.documentElement;
   root.style.setProperty("--accent", hex);
   root.style.setProperty("--accent-hover", hover);
@@ -147,30 +183,6 @@ function applyAccentColor(color: string) {
   } else {
     root.style.setProperty("--accent-glow", "none");
   }
-}
-
-function normalizeHexColor(input: string): string {
-  let s = input.trim().toLowerCase();
-  if (s.startsWith("#")) s = s.slice(1);
-  if (/^[0-9a-f]{3}$/.test(s)) s = s.split("").map((c) => c + c).join("");
-  if (!/^[0-9a-f]{6}$/.test(s)) return "#2563eb";
-  return "#" + s;
-}
-
-function hexToRgbValues(hex: string): { r: number; g: number; b: number } {
-  const h = hex.slice(1);
-  return {
-    r: parseInt(h.slice(0, 2), 16),
-    g: parseInt(h.slice(2, 4), 16),
-    b: parseInt(h.slice(4, 6), 16),
-  };
-}
-
-function darkenHex(hex: string, amount: number): string {
-  const { r, g, b } = hexToRgbValues(hex);
-  const dim = (v: number) => Math.max(0, Math.min(255, Math.round(v * (1 - amount))));
-  const toHex = (v: number) => v.toString(16).padStart(2, "0");
-  return "#" + toHex(dim(r)) + toHex(dim(g)) + toHex(dim(b));
 }
 
 // 皮肤：在 documentElement 上挂 class（与 .dark 同机制）；少女粉皮肤接管强调色，

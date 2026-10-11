@@ -1,5 +1,5 @@
 import React from "react";
-import { useTabStore } from "@/store/tabStore";
+import { useTabStore, getTabLineCount } from "@/store/tabStore";
 import { useEditorStore } from "@/store/editorStore";
 import { getEncodingLabel } from "@/utils/encoding";
 import {
@@ -51,7 +51,11 @@ export default function StatusBar() {
           <span style={{ opacity: 0.7 }}>列 {cursorPos.column}</span>
         )}
         {tab && <span style={{ opacity: 0.2 }}>·</span>}
-        {tab && <span style={{ opacity: 0.7 }}>{tab.content.split("\n").length} 行</span>}
+        {tab && (
+          <span style={{ opacity: 0.7 }}>
+            {(getTabLineCount?.(tab.id) ?? tab.content.split("\n").length)} 行
+          </span>
+        )}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         {tab?.filePath && sizeLabel && (

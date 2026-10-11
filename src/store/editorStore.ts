@@ -54,6 +54,8 @@ interface EditorStore {
   setEditorView: (view: EditorView | null) => void;
   updateCursor: (tabId: string, pos: CursorPosition) => void;
   updateScroll: (tabId: string, pos: number) => void;
+  /** tab 关闭时释放其光标/滚动缓存，防止 Record 无界增长 */
+  releaseTabState: (tabId: string) => void;
   toggleSidebar: () => void;
   setSettingsOpen: (open: boolean) => void;
   setCommandPaletteOpen: (open: boolean) => void;
@@ -95,14 +97,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setEditorView: (view) => set({ editorView: view }),
 
   updateCursor: (tabId, pos) =>
-    set((s) => ({
-      cursorPositions: { ...s.cursorPositions, [tabId]: pos },
-    })),
+    set((s) => {
+      const prev = s.cursorPositions[tabId];
+      // 位置未变时返回原 state（跳过通知）：光标回调可能高频触发
+      if (prev && prev.line === pos.line && prev.column === pos.column) return s;
+      return { cursorPositions: { ...s.cursorPositions, [tabId]: pos } };
+    }),
 
   updateScroll: (tabId, pos) =>
-    set((s) => ({
-      scrollPositions: { ...s.scrollPositions, [tabId]: pos },
-    })),
+    set((s) => {
+      if (s.scrollPositions[tabId] === pos) return s; // 位置未变时跳过通知
+      return { scrollPositions: { ...s.scrollPositions, [tabId]: pos } };
+    }),
+
+  releaseTabState: (tabId) =>
+    set((s) => {
+      if (!(tabId in s.cursorPositions) && !(tabId in s.scrollPositions)) return s;
+      const cursorPositions = { ...s.cursorPositions };
+      const scrollPositions = { ...s.scrollPositions };
+      delete cursorPositions[tabId];
+      delete scrollPositions[tabId];
+      return { cursorPositions, scrollPositions };
+    }),
 
   toggleSidebar: () =>
     set((s) => {

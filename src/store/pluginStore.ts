@@ -11,16 +11,10 @@ interface PluginStore {
 
 export const usePluginStore = create<PluginStore>((set) => ({
   installed: [],
-  available: [
-    { id: "vim-mode", name: "Vim 模式", description: "在编辑器中使用 Vim 快捷键操作", author: "NovaEdit", version: "1.0.0", enabled: false, installed: false, icon: "⌨️" },
-    { id: "emmet", name: "Emmet", description: "HTML/CSS 快速编写缩写扩展", author: "NovaEdit", version: "1.0.0", enabled: false, installed: false, icon: "⚡" },
-    { id: "prettier", name: "Prettier", description: "代码自动格式化工具", author: "NovaEdit", version: "1.0.0", enabled: false, installed: false, icon: "✨" },
-    { id: "color-picker", name: "颜色拾取器", description: "在代码中预览和选择颜色", author: "NovaEdit", version: "1.0.0", enabled: false, installed: false, icon: "🎨" },
-    { id: "markdown-preview", name: "Markdown 预览", description: "实时预览 Markdown 文件", author: "NovaEdit", version: "1.0.0", enabled: false, installed: false, icon: "📝" },
-    { id: "image-preview", name: "图片预览", description: "在编辑器中预览图片文件", author: "NovaEdit", version: "1.0.0", enabled: false, installed: false, icon: "🖼️" },
-    { id: "word-count", name: "字数统计", description: "实时统计字符、单词、行数", author: "NovaEdit", version: "1.0.0", enabled: false, installed: false, icon: "📊" },
-    { id: "git-lens", name: "Git 透视", description: "查看每行代码的 Git 提交信息", author: "NovaEdit", version: "1.0.0", enabled: false, installed: false, icon: "🔍" },
-  ],
+  // 插件系统目前仅为骨架：无任何内置/可安装插件。
+  // 之前的 8 个硬编码假插件（author "NovaEdit"、无实际实现）已删除，
+  // 避免向用户展示不存在的功能；未来接入真实插件机制时再填充。
+  available: [],
 
   install: (plugin) =>
     set((state) => ({

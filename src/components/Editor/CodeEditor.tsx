@@ -49,30 +49,32 @@ function getLanguageExtension(lang: string): Extension | null {
   }
 }
 
+// 语法高亮颜色全部走 index.css 末尾的 --hl-* token（:root 浅色 / .dark 深色两套），
+// 替换原先 26 个硬编码浅色 hex（暗色模式下对比度不达标）
 const novaHighlight = HighlightStyle.define([
-  { tag: tags.keyword, color: "#7c3aed" },
-  { tag: tags.operator, color: "#0ea5e9" },
-  { tag: tags.special(tags.variableName), color: "#ef4444" },
-  { tag: tags.typeName, color: "#eab308" },
-  { tag: tags.atom, color: "#f97316" },
-  { tag: tags.number, color: "#f97316" },
-  { tag: tags.bool, color: "#f97316" },
-  { tag: tags.definition(tags.variableName), color: "#3b82f6" },
-  { tag: tags.string, color: "#22c55e" },
-  { tag: tags.special(tags.string), color: "#22c55e" },
-  { tag: tags.comment, color: "#9ca3af", fontStyle: "italic" },
-  { tag: tags.variableName, color: "#374151" },
-  { tag: tags.tagName, color: "#ef4444" },
-  { tag: tags.bracket, color: "#6b7280" },
-  { tag: tags.meta, color: "#eab308" },
-  { tag: tags.link, color: "#3b82f6", textDecoration: "underline" },
-  { tag: tags.heading, color: "#ef4444", fontWeight: "bold" },
+  { tag: tags.keyword, color: "var(--hl-keyword)" },
+  { tag: tags.operator, color: "var(--hl-operator)" },
+  { tag: tags.special(tags.variableName), color: "var(--hl-special)" },
+  { tag: tags.typeName, color: "var(--hl-type)" },
+  { tag: tags.atom, color: "var(--hl-atom)" },
+  { tag: tags.number, color: "var(--hl-number)" },
+  { tag: tags.bool, color: "var(--hl-bool)" },
+  { tag: tags.definition(tags.variableName), color: "var(--hl-definition)" },
+  { tag: tags.string, color: "var(--hl-string)" },
+  { tag: tags.special(tags.string), color: "var(--hl-string)" },
+  { tag: tags.comment, color: "var(--hl-comment)", fontStyle: "italic" },
+  { tag: tags.variableName, color: "var(--hl-variable)" },
+  { tag: tags.tagName, color: "var(--hl-tag)" },
+  { tag: tags.bracket, color: "var(--hl-bracket)" },
+  { tag: tags.meta, color: "var(--hl-meta)" },
+  { tag: tags.link, color: "var(--hl-link)", textDecoration: "underline" },
+  { tag: tags.heading, color: "var(--hl-heading)", fontWeight: "bold" },
   { tag: tags.emphasis, fontStyle: "italic" },
   { tag: tags.strong, fontWeight: "bold" },
-  { tag: tags.className, color: "#eab308" },
-  { tag: tags.propertyName, color: "#3b82f6" },
-  { tag: tags.function(tags.variableName), color: "#0ea5e9" },
-  { tag: tags.regexp, color: "#ef4444" },
+  { tag: tags.className, color: "var(--hl-class)" },
+  { tag: tags.propertyName, color: "var(--hl-property)" },
+  { tag: tags.function(tags.variableName), color: "var(--hl-function)" },
+  { tag: tags.regexp, color: "var(--hl-regexp)" },
 ]);
 
 // Compartments for dynamic reconfiguration
@@ -145,19 +147,54 @@ function makeTheme() {
       color: "var(--bg-primary)",
     },
     ".cm-searchMatch": {
-      background: "rgba(250, 179, 135, 0.3)",
+      background: "var(--hl-search-match)",
       borderRadius: "2px",
     },
     ".cm-searchMatch.cm-searchMatch-selected": {
-      background: "rgba(250, 179, 135, 0.5)",
+      background: "var(--hl-search-match-selected)",
     },
   });
 }
+
+// 与 tab 无关的静态扩展：模块级组装一次（语言包均为静态 import），
+// 编辑器重建时直接复用同一组实例，避免重复构建
+const staticBaseExtensions: Extension[] = [
+  foldGutter(),
+  highlightSpecialChars(),
+  history(),
+  drawSelection(),
+  EditorState.allowMultipleSelections.of(true),
+  indentOnInput(),
+  syntaxHighlighting(novaHighlight),
+  bracketMatching(),
+  closeBrackets(),
+  autocompletion(),
+  highlightActiveLine(),
+  highlightActiveLineGutter(),
+  highlightSelectionMatches(),
+  middleButtonRectSelection(),
+  keymap.of([
+    ...closeBracketsKeymap,
+    ...defaultKeymap,
+    ...searchKeymap,
+    ...historyKeymap,
+    ...foldKeymap,
+    ...completionKeymap,
+    ...lintKeymap,
+    indentWithTab,
+  ]),
+  themeCompartment.of(makeTheme()),
+];
 
 export default function CodeEditor({ tabId }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const isComposingRef = useRef(false);
+  // 上次写入 store 的光标位置：用于跳过重复值，避免每事务触发订阅者重渲染
+  const lastCursorRef = useRef<{ line: number; column: number } | null>(null);
+  // 内容防抖同步：pending 保存最近一次事务的全文，定时器 200ms 后写入 store
+  const pendingContentRef = useRef<string | null>(null);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tab = useTabStore((s) => s.tabs.find((t) => t.id === tabId));
   const updateContent = useTabStore((s) => s.updateContent);
   const { fontSize, fontFamily, lineHeight, wordWrap, showLineNumbers } = useSettingsStore();
@@ -171,44 +208,46 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
     if (viewRef.current) {
       viewRef.current.destroy();
     }
+    lastCursorRef.current = null;
+
+    // 把防抖中的待写内容写入 store；卸载 / 失焦 / 组合结束前必须调用，防止丢字
+    const flushContentSync = () => {
+      if (syncTimerRef.current) {
+        clearTimeout(syncTimerRef.current);
+        syncTimerRef.current = null;
+      }
+      if (pendingContentRef.current !== null) {
+        const content = pendingContentRef.current;
+        pendingContentRef.current = null;
+        updateContent(tabId, content);
+      }
+    };
 
     const extensions: Extension[] = [
-      foldGutter(),
+      ...staticBaseExtensions,
       ...(showLineNumbers ? [lineNumbers()] : []),
-      highlightSpecialChars(),
-      history(),
-      drawSelection(),
-      EditorState.allowMultipleSelections.of(true),
-      indentOnInput(),
-      syntaxHighlighting(novaHighlight),
-      bracketMatching(),
-      closeBrackets(),
-      autocompletion(),
-      highlightActiveLine(),
-      highlightActiveLineGutter(),
-      highlightSelectionMatches(),
-      middleButtonRectSelection(),
-      keymap.of([
-        ...closeBracketsKeymap,
-        ...defaultKeymap,
-        ...searchKeymap,
-        ...historyKeymap,
-        ...foldKeymap,
-        ...completionKeymap,
-        ...lintKeymap,
-        indentWithTab,
-      ]),
       EditorView.updateListener.of((update) => {
-        if (update.docChanged && !isComposingRef.current) {
-          // IME 组合期间不向上同步内容，避免外部回写打断输入会话
-          updateContent(tabId, update.state.doc.toString());
+        if (update.docChanged) {
+          // 全量内容同步改为 200ms 防抖；IME 组合期间只暂存不排程，
+          // 由 compositionend / blur / destroy 统一 flush
+          pendingContentRef.current = update.state.doc.toString();
+          if (!isComposingRef.current) {
+            if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+            syncTimerRef.current = setTimeout(flushContentSync, 200);
+          }
         }
-        const pos = update.state.selection.main.head;
-        const line = update.state.doc.lineAt(pos);
-        updateCursor(tabId, {
-          line: line.number,
-          column: pos - line.from + 1,
-        });
+        // 光标位置：仅在选择或文档变化的事务里计算，且行列真正变化才写
+        // store——避免每个事务都新建对象导致 StatusBar 等订阅者重渲染
+        if (update.selectionSet || update.docChanged) {
+          const pos = update.state.selection.main.head;
+          const line = update.state.doc.lineAt(pos);
+          const next = { line: line.number, column: pos - line.from + 1 };
+          const last = lastCursorRef.current;
+          if (!last || last.line !== next.line || last.column !== next.column) {
+            lastCursorRef.current = next;
+            updateCursor(tabId, next);
+          }
+        }
       }),
       // 监听 IME 组合事件
       EditorView.domEventHandlers({
@@ -217,10 +256,15 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
         },
         compositionend: () => {
           isComposingRef.current = false;
-          // 组合结束后同步一次完整内容
+          // 组合结束后立即同步一次完整内容（flush 防抖中的待写内容）
           if (viewRef.current) {
-            updateContent(tabId, viewRef.current.state.doc.toString());
+            pendingContentRef.current = viewRef.current.state.doc.toString();
           }
+          flushContentSync();
+        },
+        blur: () => {
+          // 失焦前落库，防止 200ms 窗口内的编辑丢失
+          flushContentSync();
         },
         // 剪贴板贴图：仅当剪贴板里有图片且没有可用文本时接管，否则放行默认粘贴
         paste: (event, view) => {
@@ -254,7 +298,6 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
           return true;
         },
       }),
-      themeCompartment.of(makeTheme()),
       languageCompartment.of(getLanguageExtension(tab.language) || []),
       wordWrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
       // Markdown/纯文本便签：把 ![](...) 渲染成内联图片
@@ -282,6 +325,8 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
     setEditorView(view);
 
     return () => {
+      // 卸载/重建前 flush 防抖中的待写内容，防止丢字
+      flushContentSync();
       view.destroy();
       viewRef.current = null;
       setEditorView(null);

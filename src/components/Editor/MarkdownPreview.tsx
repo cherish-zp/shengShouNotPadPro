@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useDeferredValue } from "react";
 import { renderMarkdown } from "@/utils/markdown";
 import { dirname } from "@/utils/imagePaste";
 import { resolvePreviewImagesAsync } from "@/utils/imageLoader";
@@ -11,9 +11,19 @@ interface MarkdownPreviewProps {
 
 export default function MarkdownPreview({ content, filePath }: MarkdownPreviewProps) {
   const [html, setHtml] = useState("");
+  // useDeferredValue 让击键渲染保持高优先级；再叠加 300ms 防抖，
+  // 避免连续输入时每次全量重解析 Markdown
+  const deferredContent = useDeferredValue(content);
+  const [renderedContent, setRenderedContent] = useState(content);
 
   useEffect(() => {
-    const raw = renderMarkdown(content);
+    const timer = setTimeout(() => setRenderedContent(deferredContent), 300);
+    return () => clearTimeout(timer);
+  }, [deferredContent]);
+
+  useEffect(() => {
+    const raw = renderMarkdown(renderedContent);
+    // 图片路径解析同样基于防抖后的内容（renderedContent），不在击键路径上
     const baseDir = filePath ? dirname(filePath) : null;
     let cancelled = false;
     resolvePreviewImagesAsync(raw, baseDir).then((out) => {
@@ -22,7 +32,7 @@ export default function MarkdownPreview({ content, filePath }: MarkdownPreviewPr
     return () => {
       cancelled = true;
     };
-  }, [content, filePath]);
+  }, [renderedContent, filePath]);
 
   return (
     <div

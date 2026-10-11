@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useEditorStore } from "@/store/editorStore";
 import { useTabStore } from "@/store/tabStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -30,6 +30,16 @@ export default function MainLayout() {
   const hasImage = !!backgroundImage;
   const [sidebarWidth, setSidebarWidth] = useState(300);
   const [isResizing, setIsResizing] = useState(false);
+  // 拖拽侧边栏：mousemove 高频触发，用 rAF 节流为每帧最多一次 setState
+  const resizeRafRef = useRef<number | null>(null);
+  const pendingWidthRef = useRef<number | null>(null);
+
+  // 卸载时取消未执行的 rAF，避免对已卸载组件 setState
+  useEffect(() => {
+    return () => {
+      if (resizeRafRef.current !== null) cancelAnimationFrame(resizeRafRef.current);
+    };
+  }, []);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -39,10 +49,28 @@ export default function MainLayout() {
 
     const onMouseMove = (e: MouseEvent) => {
       const diff = e.clientX - startX;
-      setSidebarWidth(Math.max(220, Math.min(600, startWidth + diff)));
+      pendingWidthRef.current = Math.max(220, Math.min(600, startWidth + diff));
+      if (resizeRafRef.current === null) {
+        resizeRafRef.current = requestAnimationFrame(() => {
+          resizeRafRef.current = null;
+          if (pendingWidthRef.current !== null) {
+            setSidebarWidth(pendingWidthRef.current);
+            pendingWidthRef.current = null;
+          }
+        });
+      }
     };
 
     const onMouseUp = () => {
+      // 松手时把最后一帧之后累积的宽度落掉，避免停在中间值
+      if (resizeRafRef.current !== null) {
+        cancelAnimationFrame(resizeRafRef.current);
+        resizeRafRef.current = null;
+      }
+      if (pendingWidthRef.current !== null) {
+        setSidebarWidth(pendingWidthRef.current);
+        pendingWidthRef.current = null;
+      }
       setIsResizing(false);
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);

@@ -1,14 +1,18 @@
 import { useCallback } from "react";
 
-// Tauri invoke wrapper with dev-mode fallback
+/** 是否运行在 Tauri WebView 内（区别于纯浏览器 dev server） */
+function isTauriEnvironment(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+// Tauri invoke wrapper：仅非 Tauri 环境（浏览器调试）返回 mock；
+// Tauri 环境下真实错误必须抛出，不再被 mock 兜底吞掉。
 async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  try {
-    const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
-    return await tauriInvoke<T>(cmd, args);
-  } catch {
-    // Dev mode fallback - return mock data
+  if (!isTauriEnvironment()) {
     return getMockData<T>(cmd, args);
   }
+  const { invoke: tauriInvoke } = await import("@tauri-apps/api/core");
+  return tauriInvoke<T>(cmd, args);
 }
 
 /**
@@ -61,20 +65,6 @@ function getMockData<T>(cmd: string, args?: Record<string, unknown>): T {
       return "UTF-8" as T;
     case "list_directory":
       return [] as T;
-    case "search_in_file":
-    case "search_in_directory":
-      return [] as T;
-    case "git_status":
-    case "git_log":
-      return [] as T;
-    case "git_branch":
-      return { current: "main", branches: ["main"] } as T;
-    case "git_diff":
-      return "" as T;
-    case "list_recent_files":
-      return [] as T;
-    case "get_clipboard_text":
-      return "" as T;
     case "open_file_dialog":
       return null as T;
     case "save_file_dialog":
@@ -127,20 +117,6 @@ export function useTauri() {
     );
   }, []);
 
-  const searchInFile = useCallback(async (path: string, query: string, caseSensitive: boolean, useRegex: boolean) => {
-    return invoke<Array<{ line: number; col: number; text: string; length: number }>>(
-      "search_in_file",
-      { path, query, caseSensitive, useRegex }
-    );
-  }, []);
-
-  const searchInDir = useCallback(async (dir: string, query: string, caseSensitive: boolean, useRegex: boolean, filePattern?: string) => {
-    return invoke<Array<{ filePath: string; fileName: string; matches: Array<{ line: number; col: number; text: string; length: number }> }>>(
-      "search_in_directory",
-      { dir, query, caseSensitive, useRegex, filePattern }
-    );
-  }, []);
-
   const detectEncoding = useCallback(async (path: string) => {
     return invoke<string>("detect_encoding", { path });
   }, []);
@@ -151,14 +127,6 @@ export function useTauri() {
 
   const transcodeText = useCallback(async (content: string, from: string, to: string) => {
     return invoke<string>("transcode_text", { content, from, to });
-  }, []);
-
-  const gitStatus = useCallback(async (repoPath: string) => {
-    return invoke<Array<{ path: string; status: string; staged: boolean }>>("git_status", { repoPath });
-  }, []);
-
-  const gitDiff = useCallback(async (repoPath: string, filePath?: string) => {
-    return invoke<string>("git_diff", { repoPath, filePath });
   }, []);
 
   const revealInFinder = useCallback(async (path: string) => {
@@ -172,13 +140,9 @@ export function useTauri() {
     saveDialog,
     openFolderDialog,
     listDirectory,
-    searchInFile,
-    searchInDir,
     detectEncoding,
     listEncodings,
     transcodeText,
-    gitStatus,
-    gitDiff,
     revealInFinder,
   };
 }

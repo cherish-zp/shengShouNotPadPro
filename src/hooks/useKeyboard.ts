@@ -8,14 +8,15 @@ const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 48;
 
 export function useKeyboard() {
-  const tabStore = useTabStore();
-  const editorStore = useEditorStore();
-  const searchStore = useSearchStore();
-  const settingsStore = useSettingsStore();
-
   useEffect(() => {
+    // handler 内统一用 getState() 取最新状态：监听器只挂一次，
+    // 不随 store 变化重挂（此前整店订阅导致每次击键都重装监听器）
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey;
+      const tabStore = useTabStore.getState();
+      const editorStore = useEditorStore.getState();
+      const searchStore = useSearchStore.getState();
+      const settingsStore = useSettingsStore.getState();
 
       // Cmd+N - New tab
       if (isMeta && e.key === "n" && !e.shiftKey) {
@@ -131,6 +132,7 @@ export function useKeyboard() {
     const handleWheel = (e: WheelEvent) => {
       if (e.metaKey || e.ctrlKey) {
         e.preventDefault();
+        const settingsStore = useSettingsStore.getState();
         const currentSize = settingsStore.fontSize;
         if (e.deltaY < 0) {
           // 向上滚 = 放大
@@ -148,7 +150,9 @@ export function useKeyboard() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("wheel", handleWheel);
     };
-  }, [tabStore, editorStore, searchStore, settingsStore]);
+    // getState() 在 handler 内取值，依赖数组保持为空（监听器终身只挂一次）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }
 
 export { MIN_FONT_SIZE, MAX_FONT_SIZE };

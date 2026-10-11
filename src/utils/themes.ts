@@ -1,48 +1,8 @@
-export interface ThemeColors {
-  bgPrimary: string;
-  bgSecondary: string;
-  bgSurface: string;
-  bgHover: string;
-  textPrimary: string;
-  textSecondary: string;
-  accent: string;
-  accentHover: string;
-  border: string;
-  success: string;
-  error: string;
-  warning: string;
-}
-
-export const DARK_THEME: ThemeColors = {
-  bgPrimary: "#1e1e2e",
-  bgSecondary: "#181825",
-  bgSurface: "#313244",
-  bgHover: "#45475a",
-  textPrimary: "#cdd6f4",
-  textSecondary: "#a6adc8",
-  accent: "#89b4fa",
-  accentHover: "#74c7ec",
-  border: "#45475a",
-  success: "#a6e3a1",
-  error: "#f38ba8",
-  warning: "#fab387",
-};
-
-export const LIGHT_THEME: ThemeColors = {
-  bgPrimary: "#eff1f5",
-  bgSecondary: "#e6e9ef",
-  bgSurface: "#ccd0da",
-  bgHover: "#bcc0cc",
-  textPrimary: "#4c4f69",
-  textSecondary: "#6c6f85",
-  accent: "#1e66f5",
-  accentHover: "#2a6ef5",
-  border: "#bcc0cc",
-  success: "#40a02b",
-  error: "#d20f39",
-  warning: "#df8e1d",
-};
-
+/**
+ * 主题强调色预设（设置面板「外观」用）。
+ * 注：原 DARK_THEME / LIGHT_THEME / ThemeColors 常量为死代码已删除——
+ * 主题配色实际由 index.css 的 CSS 变量（:root / .dark）提供。
+ */
 export const ACCENT_PRESETS = [
   { name: "蓝", color: "#2563EB" },
   { name: "紫", color: "#7C3AED" },

@@ -1,9 +1,6 @@
 mod commands;
 mod migration;
-mod state;
-mod utils;
 
-use state::AppState;
 use tauri::Emitter;
 
 pub fn run() {
@@ -20,7 +17,6 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             commands::file_ops::read_file,
             commands::file_ops::write_file,
@@ -28,27 +24,16 @@ pub fn run() {
             commands::file_ops::get_file_size,
             commands::file_ops::list_directory,
             commands::file_ops::read_file_bytes,
-            commands::file_ops::list_directory_recursive,
             commands::file_ops::delete_file,
             commands::file_ops::rename_file,
             commands::encoding::detect_encoding,
             commands::encoding::list_encodings,
             commands::encoding::transcode_text,
-            commands::search::search_in_file,
-            commands::search::search_in_directory,
-            commands::search::replace_in_file,
-            commands::git_ops::git_status,
-            commands::git_ops::git_diff,
-            commands::git_ops::git_log,
-            commands::git_ops::git_branch,
             commands::system::open_file_dialog,
             commands::system::save_file_dialog,
             commands::system::open_folder_dialog,
             commands::system::reveal_in_finder,
-            commands::clipboard::get_clipboard_text,
             commands::clipboard::set_clipboard_text,
-            commands::file_ops::add_recent_file,
-            commands::file_ops::list_recent_files,
             commands::file_ops::remove_quarantine,
             commands::file_ops::save_image_bytes,
             commands::file_ops::copy_image_file,

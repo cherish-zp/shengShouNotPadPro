@@ -16,7 +16,6 @@ import {
   isPasteSupported,
   randomLinkId,
 } from "@/utils/imagePaste";
-import { getAssetsDir, getTabStagingDir, saveImageBytes, copyImageFile } from "@/utils/imageBridge";
 import { toast } from "@/utils/toast";
 
 interface ImageTarget {
@@ -73,6 +72,8 @@ export async function insertImageBytes(
     return false;
   }
   try {
+    // imageBridge 按需动态加载：避免被静态 import 拉进首屏主 chunk
+    const { saveImageBytes } = await import("@/utils/imageBridge");
     const { link } = await saveImageForTarget(target, name, (dir) =>
       saveImageBytes(dir, name, bytesToBase64(bytes))
     );
@@ -104,6 +105,8 @@ export async function insertImageFile(srcPath: string): Promise<boolean> {
     return false;
   }
   try {
+    // imageBridge 按需动态加载：避免被静态 import 拉进首屏主 chunk
+    const { copyImageFile } = await import("@/utils/imageBridge");
     const target: ImageTarget = { tabId: tab.id, language: tab.language, filePath: tab.filePath };
     const { link } = await saveImageForTarget(target, imageName, (dir) =>
       copyImageFile(srcPath, dir, imageName)
@@ -127,6 +130,8 @@ async function saveImageForTarget(
   name: string,
   write: (dir: string) => Promise<string>
 ): Promise<{ absPath: string; link: string }> {
+  // imageBridge 按需动态加载：避免被静态 import 拉进首屏主 chunk
+  const { getAssetsDir, getTabStagingDir } = await import("@/utils/imageBridge");
   if (target.filePath) {
     const dir = getAssetsDir(target.filePath);
     const absPath = await write(dir);

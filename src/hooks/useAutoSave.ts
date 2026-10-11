@@ -4,13 +4,13 @@ import type { Tab } from "@/types";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTauri } from "./useTauri";
 import { extractStagingImageMoves, rewriteStagingLinks } from "@/utils/imagePaste";
-import { getAssetsDir, getStagingRoot, ensureDir, moveFile } from "@/utils/imageBridge";
 
 /**
  * 保存单个便签：
  * 1. 若正文引用了暂存目录的图片（草稿贴图），先把图片迁移到 <文档目录>/assets/ 并重写链接；
  *    迁移失败不阻塞正文保存（保留暂存绝对路径，预览仍可显示）。
  * 2. 写入正文。
+ * imageBridge 走动态 import：拆出主包 chunk，且只在真正保存时加载。
  */
 async function persistTab(
   tab: Tab,
@@ -19,6 +19,9 @@ async function persistTab(
   if (!tab.filePath) return;
   let content = tab.content;
   try {
+    const { getAssetsDir, getStagingRoot, ensureDir, moveFile } = await import(
+      "@/utils/imageBridge"
+    );
     const stagingRoot = await getStagingRoot();
     const assetsDir = getAssetsDir(tab.filePath);
     const moves = extractStagingImageMoves(content, stagingRoot, assetsDir);
@@ -45,14 +48,16 @@ async function persistTab(
 }
 
 export function useAutoSave() {
-  const { autoSave, autoSaveInterval } = useSettingsStore();
-  const tabs = useTabStore((s) => s.tabs);
+  const autoSave = useSettingsStore((s) => s.autoSave);
+  const autoSaveInterval = useSettingsStore((s) => s.autoSaveInterval);
   const markClean = useTabStore((s) => s.markClean);
   const setFilePath = useTabStore((s) => s.setFilePath);
   const { writeFile, saveDialog } = useTauri();
 
   // 自动保存：只针对已有文件路径的便签，没有路径的便签自动保留在本地存储（不弹窗）
+  // tabs 在回调内 getState() 读取：本回调稳定，interval effect 不会因击键重建
   const autoSaveAll = useCallback(async () => {
+    const { tabs } = useTabStore.getState();
     for (const tab of tabs) {
       if (tab.dirty && tab.filePath) {
         try {
@@ -63,7 +68,7 @@ export function useAutoSave() {
         }
       }
     }
-  }, [tabs, writeFile, markClean]);
+  }, [writeFile, markClean]);
 
   useEffect(() => {
     if (!autoSave) return;

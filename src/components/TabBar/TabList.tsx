@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { Plus, Search } from "lucide-react";
 import { useTabStore } from "@/store/tabStore";
 import TabItem from "./TabItem";
@@ -19,6 +19,16 @@ export default function TabList() {
   const [filter, setFilter] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
   const [showSearch, setShowSearch] = useState(false);
+
+  // 回调按 tabId 传参并保持引用稳定：配合 TabItem 的 memo，
+  // 单个便签内容变化不会让整个列表行重渲染
+  const handleSelect = useCallback((id: string) => setActiveTab(id), [setActiveTab]);
+  const handleClose = useCallback((id: string) => closeTab(id), [closeTab]);
+  const handleRename = useCallback((id: string, name: string) => renameTab(id, name), [renameTab]);
+  const handleContextMenu = useCallback((e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, tabId: id });
+  }, []);
 
   const filtered = filter
     ? tabs.filter((t) => t.name.toLowerCase().includes(filter.toLowerCase()))
@@ -124,13 +134,10 @@ export default function TabList() {
               key={tab.id}
               tab={tab}
               isActive={tab.id === activeTabId}
-              onSelect={() => setActiveTab(tab.id)}
-              onClose={() => closeTab(tab.id)}
-              onRename={(name) => renameTab(tab.id, name)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
-              }}
+              onSelect={handleSelect}
+              onClose={handleClose}
+              onRename={handleRename}
+              onContextMenu={handleContextMenu}
             />
           ))
         )}

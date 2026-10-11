@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, memo } from "react";
 import { FolderOpen, FileText, ChevronRight, ChevronDown, Plus, Search, StickyNote, Trash2, Eye, EyeOff, Shield, FolderMinus } from "lucide-react";
 import { useEditorStore } from "@/store/editorStore";
 import { useTabStore } from "@/store/tabStore";
@@ -63,13 +63,32 @@ function NotesSection() {
   tabsRef.current = tabs;
 
   // 按下便签行：记录拖拽起点（搜索过滤时列表是子集、索引与 store 不对齐，禁用拖拽）
-  const handleRowPointerDown = (index: number) => (e: React.PointerEvent) => {
+  const handleRowPointerDown = useCallback((e: React.PointerEvent, index: number) => {
     if (filter || e.button !== 0) return;
     // 关闭按钮 / 重命名输入框上的按下不触发拖拽
     if ((e.target as HTMLElement).closest("button, input")) return;
     suppressClickRef.current = false;
     dragState.current = { index, startY: e.clientY, active: false };
-  };
+  }, [filter]);
+
+  // TabItem 回调统一按 tabId 传参并保持引用稳定：配合 TabItem 的 memo，
+  // 单个便签内容变化（击键）不再让列表里其它行跟着重渲染
+  const handleSelect = useCallback((id: string) => {
+    // 拖拽结束时落在本行上的 click 不切换选中
+    if (suppressClickRef.current) return;
+    setActiveTab(id);
+  }, [setActiveTab]);
+  const handleClose = useCallback((id: string) => closeTab(id), [closeTab]);
+  const handleRename = useCallback((id: string, name: string) => {
+    // 关联磁盘文件的便签：磁盘文件一并重命名；失败提示且不改显示名
+    const tab = tabsRef.current.find((t) => t.id === id);
+    if (!tab) return;
+    renameTabPersisted(tab, name).catch((err) => window.alert(`重命名失败：${err}`));
+  }, []);
+  const handleContextMenu = useCallback((e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, tabId: id });
+  }, []);
 
   useEffect(() => {
     const onPointerMove = (e: PointerEvent) => {
@@ -226,23 +245,13 @@ function NotesSection() {
               <TabItem
                 tab={tab}
                 isActive={tab.id === activeTabId}
-                onSelect={() => {
-                  // 拖拽结束时落在本行上的 click 不切换选中
-                  if (suppressClickRef.current) return;
-                  setActiveTab(tab.id);
-                }}
-                onClose={() => closeTab(tab.id)}
-                onRename={(name) => {
-                  // 关联磁盘文件的便签：磁盘文件一并重命名；失败提示且不改显示名
-                  renameTabPersisted(tab, name).catch((err) => window.alert(`重命名失败：${err}`));
-                }}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
-                }}
+                onSelect={handleSelect}
+                onClose={handleClose}
+                onRename={handleRename}
+                onContextMenu={handleContextMenu}
                 dataTabIndex={i}
                 dropIndicator={indicator?.index === i ? indicator.pos : null}
-                onRowPointerDown={handleRowPointerDown(i)}
+                onRowPointerDown={handleRowPointerDown}
               />
             </React.Fragment>
           ))
@@ -290,12 +299,115 @@ function NotesSection() {
 }
 
 /* ──────────── 文件树区域（多目录工作区：每个打开的目录是一个根节点） ──────────── */
+
+// 文件树行组件：memo + 父级稳定回调。dragOverPath 传字符串而非布尔值，
+// 以便嵌套子行也能更新落点高亮（仅拖拽期间会变，不在击键路径上）
+interface TreeNodeRowProps {
+  node: TreeNode;
+  depth: number;
+  dragOverPath: string | null;
+  onToggle: (node: TreeNode) => void;
+  onContextMenu: (e: React.MouseEvent, node: TreeNode) => void;
+  onDragStart: (e: React.DragEvent, node: TreeNode) => void;
+  onDragEnd: () => void;
+  onDragOver: (e: React.DragEvent, node: TreeNode) => void;
+  onDragLeave: (node: TreeNode) => void;
+  onDrop: (e: React.DragEvent, node: TreeNode) => void;
+}
+
+const TreeNodeRow = memo(function TreeNodeRow({
+  node,
+  depth,
+  dragOverPath,
+  onToggle,
+  onContextMenu,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+}: TreeNodeRowProps) {
+  return (
+    <div>
+      <div
+        draggable
+        onDragStart={(e) => onDragStart(e, node)}
+        onDragEnd={onDragEnd}
+        onClick={() => onToggle(node)}
+        onContextMenu={(e) => onContextMenu(e, node)}
+        onDragOver={node.isDir ? (e) => onDragOver(e, node) : undefined}
+        onDragLeave={node.isDir ? () => onDragLeave(node) : undefined}
+        onDrop={node.isDir ? (e) => onDrop(e, node) : undefined}
+        style={{
+          display: "flex", alignItems: "center", gap: 4,
+          padding: "3px 8px 3px " + (8 + depth * 16) + "px",
+          fontSize: 13, cursor: "pointer", color: "var(--text-secondary)",
+          borderRadius: 4,
+          outline: dragOverPath === node.path && node.isDir ? "1px dashed var(--accent)" : "none",
+          outlineOffset: -1,
+        }}
+        onMouseEnter={(e) => { if (dragOverPath !== node.path) e.currentTarget.style.background = "var(--bg-hover)"; }}
+        onMouseLeave={(e) => { if (dragOverPath !== node.path) e.currentTarget.style.background = "none"; }}
+      >
+        {node.isDir ? (
+          node.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+        ) : (
+          <span style={{ width: 14 }} />
+        )}
+        {node.isDir ? <FolderOpen size={14} style={{ color: "var(--warning)" }} /> : <FileText size={14} />}
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.name}</span>
+      </div>
+      {node.isDir && node.expanded && node.children?.map((child) => (
+        <TreeNodeRow
+          key={child.path}
+          node={child}
+          depth={depth + 1}
+          dragOverPath={dragOverPath}
+          onToggle={onToggle}
+          onContextMenu={onContextMenu}
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+        />
+      ))}
+    </div>
+  );
+});
+
+// 树更新工具（纯函数，模块级）：递归定位目标节点；未命中的子树保留原引用，
+// 避免整棵树换新身份击穿 TreeNodeRow 的 memo
+function updateTreeNodes(
+  nodes: TreeNode[],
+  match: (n: TreeNode) => TreeNode | null
+): TreeNode[] {
+  let changed = false;
+  const next = nodes.map((n) => {
+    const replaced = match(n);
+    if (replaced) {
+      changed = true;
+      return replaced;
+    }
+    if (n.children) {
+      const nextChildren = updateTreeNodes(n.children, match);
+      if (nextChildren !== n.children) {
+        changed = true;
+        return { ...n, children: nextChildren };
+      }
+    }
+    return n;
+  });
+  return changed ? next : nodes;
+}
+
 function FileTreeSection() {
   const openFolders = useEditorStore((s) => s.openFolders);
   const addOpenFolder = useEditorStore((s) => s.addOpenFolder);
   const removeOpenFolder = useEditorStore((s) => s.removeOpenFolder);
   const addTab = useTabStore((s) => s.addTab);
-  const tabs = useTabStore((s) => s.tabs);
+  // 不再订阅整个 tabs：击键会替换 tabs 数组引用导致整棵文件树重渲染。
+  // tabs 仅在删除/拖拽等事件回调里用到，改为 getState() 即时读取
   const closeTab = useTabStore((s) => s.closeTab);
   const [tree, setTree] = useState<TreeNode[]>([]);
   const treeRef = useRef<TreeNode[]>([]);
@@ -368,7 +480,9 @@ function FileTreeSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const toggleNode = async (node: TreeNode) => {
+  // 树更新工具：见模块级 updateTreeNodes
+
+  const toggleNode = useCallback(async (node: TreeNode) => {
     if (!node.isDir) {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
@@ -391,38 +505,31 @@ function FileTreeSection() {
       return;
     }
 
-    const newTree = [...tree];
-    const updateNode = (nodes: TreeNode[]): TreeNode[] =>
-      nodes.map((n) => {
-        if (n.path === node.path) {
-          const expanded = !n.expanded;
-          return { ...n, expanded, children: expanded && (!n.children || n.children.length === 0) ? n.children : n.children ? updateNode(n.children) : n.children };
-        }
-        if (n.children) return { ...n, children: updateNode(n.children) };
-        return n;
-      });
-    setTree(updateNode(newTree));
+    setTree((prev) =>
+      updateTreeNodes(prev, (n) => {
+        if (n.path !== node.path) return null;
+        const expanded = !n.expanded;
+        return { ...n, expanded };
+      })
+    );
 
     if (!node.expanded && (!node.children || node.children.length === 0)) {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         const entries = await invoke<Array<{ name: string; path: string; is_dir: boolean }>>("list_directory", { path: node.path });
-        const newTree2 = [...tree];
-        const loadChildren = (nodes: TreeNode[]): TreeNode[] =>
-          nodes.map((n) => {
-            if (n.path === node.path) {
-              return {
-                ...n, expanded: true,
-                children: entries.map((e) => ({ name: e.name, path: e.path, isDir: e.is_dir, children: e.is_dir ? [] : undefined, expanded: false })),
-              };
-            }
-            if (n.children) return { ...n, children: loadChildren(n.children) };
-            return n;
-          });
-        setTree(loadChildren(newTree2));
-     } catch { /* ignore */ }
+        setTree((prev) =>
+          updateTreeNodes(prev, (n) => {
+            if (n.path !== node.path) return null;
+            return {
+              ...n,
+              expanded: true,
+              children: entries.map((e) => ({ name: e.name, path: e.path, isDir: e.is_dir, children: e.is_dir ? [] : undefined, expanded: false })),
+            };
+          })
+        );
+      } catch { /* ignore */ }
     }
-  };
+  }, [addTab]);
 
   const handleConfirmDelete = async () => {
     if (!confirmDelete) return;
@@ -433,7 +540,7 @@ function FileTreeSection() {
       setTree((prev) => removeNodeByPath(prev, target.path));
       // 删除的是打开的根目录时，同步从工作区移除，避免下次同步又加载回来
       if (openFolders.includes(target.path)) removeOpenFolder(target.path);
-      findTabsForDeletion(tabs, target.path, target.isDir).forEach((t) => closeTab(t.id));
+      findTabsForDeletion(useTabStore.getState().tabs, target.path, target.isDir).forEach((t) => closeTab(t.id));
     } catch (err) {
       window.alert(`删除失败：${err}`);
     } finally {
@@ -441,30 +548,24 @@ function FileTreeSection() {
     }
   };
 
-  const refreshDir = async (dirPath: string) => {
+  const refreshDir = useCallback(async (dirPath: string) => {
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const entries = await invoke<Array<{ name: string; path: string; is_dir: boolean }>>("list_directory", { path: dirPath });
-      setTree((prev) => {
-        const apply = (nodes: TreeNode[]): TreeNode[] =>
-          nodes.map((n) => {
-            if (n.path === dirPath && n.isDir) {
-              return {
-                ...n,
-                children: buildFileTreeNodes(entries),
-              };
-            }
-            if (n.children) return { ...n, children: apply(n.children) };
-            return n;
-          });
-        return apply(prev);
-      });
+      setTree((prev) =>
+        updateTreeNodes(prev, (n) => {
+          if (n.path === dirPath && n.isDir) {
+            return { ...n, children: buildFileTreeNodes(entries) };
+          }
+          return null;
+        })
+      );
     } catch {
       /* ignore */
     }
-  };
+  }, []);
 
-  const handleDropOnDir = async (e: React.DragEvent, target: TreeNode) => {
+  const handleDropOnDir = useCallback(async (e: React.DragEvent, target: TreeNode) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverPath(null);
@@ -488,61 +589,54 @@ function FileTreeSection() {
       setTree((prev) => moveNodeInTree(prev, sourcePath, target.path));
       void refreshDir(target.path);
       const sourcePrefix = sourcePath.endsWith("/") ? sourcePath : sourcePath + "/";
-      tabs
-        .filter((t) => !!t.filePath && (t.filePath === sourcePath || (sourceIsDir && t.filePath.startsWith(sourcePrefix))))
+      useTabStore
+        .getState()
+        .tabs.filter((t) => !!t.filePath && (t.filePath === sourcePath || (sourceIsDir && t.filePath.startsWith(sourcePrefix))))
         .forEach((t) => setFilePath(t.id, buildMovedPath(t.filePath!, sourcePath, newPath, sourceIsDir)));
     } catch (err) {
       window.alert(`移动失败：${err}`);
     }
-  };
+  }, [refreshDir, setFilePath]);
 
-  const renderNode = (node: TreeNode, depth: number = 0) => (
-    <div key={node.path}>
-      <div
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData("application/x-node-path", node.path);
-          e.dataTransfer.setData("application/x-node-isdir", String(node.isDir));
-          e.dataTransfer.effectAllowed = "move";
-        }}
-        onDragEnd={() => setDragOverPath(null)}
-        onClick={() => toggleNode(node)}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setFileContextMenu({ x: e.clientX, y: e.clientY, node });
-        }}
-        onDragOver={node.isDir ? (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          e.dataTransfer.dropEffect = "move";
-          if (dragOverPath !== node.path) setDragOverPath(node.path);
-        } : undefined}
-        onDragLeave={node.isDir ? () => {
-          if (dragOverPath === node.path) setDragOverPath(null);
-        } : undefined}
-        onDrop={node.isDir ? (e) => handleDropOnDir(e, node) : undefined}
-        style={{
-          display: "flex", alignItems: "center", gap: 4,
-          padding: "3px 8px 3px " + (8 + depth * 16) + "px",
-          fontSize: 13, cursor: "pointer", color: "var(--text-secondary)",
-          borderRadius: 4,
-          outline: dragOverPath === node.path && node.isDir ? "1px dashed var(--accent)" : "none",
-          outlineOffset: -1,
-        }}
-        onMouseEnter={(e) => { if (dragOverPath !== node.path) e.currentTarget.style.background = "var(--bg-hover)"; }}
-        onMouseLeave={(e) => { if (dragOverPath !== node.path) e.currentTarget.style.background = "none"; }}
-      >
-        {node.isDir ? (
-          node.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />
-        ) : (
-          <span style={{ width: 14 }} />
-        )}
-        {node.isDir ? <FolderOpen size={14} style={{ color: "var(--warning)" }} /> : <FileText size={14} />}
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{node.name}</span>
-      </div>
-      {node.isDir && node.expanded && node.children?.map((child) => renderNode(child, depth + 1))}
-    </div>
+  // 文件树行回调：全部稳定引用，配合 TreeNodeRow 的 memo
+  const handleNodeToggle = toggleNode;
+  const handleNodeContextMenu = useCallback((e: React.MouseEvent, node: TreeNode) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFileContextMenu({ x: e.clientX, y: e.clientY, node });
+  }, []);
+  const handleNodeDragStart = useCallback((e: React.DragEvent, node: TreeNode) => {
+    e.dataTransfer.setData("application/x-node-path", node.path);
+    e.dataTransfer.setData("application/x-node-isdir", String(node.isDir));
+    e.dataTransfer.effectAllowed = "move";
+  }, []);
+  const handleNodeDragEnd = useCallback(() => setDragOverPath(null), []);
+  const handleNodeDragOver = useCallback((e: React.DragEvent, node: TreeNode) => {
+    if (!node.isDir) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverPath((prev) => (prev === node.path ? prev : node.path));
+  }, []);
+  const handleNodeDragLeave = useCallback((node: TreeNode) => {
+    setDragOverPath((prev) => (prev === node.path ? null : prev));
+  }, []);
+  const handleNodeDrop = handleDropOnDir;
+
+  const renderTreeNodeRow = (node: TreeNode) => (
+    <TreeNodeRow
+      key={node.path}
+      node={node}
+      depth={0}
+      dragOverPath={dragOverPath}
+      onToggle={handleNodeToggle}
+      onContextMenu={handleNodeContextMenu}
+      onDragStart={handleNodeDragStart}
+      onDragEnd={handleNodeDragEnd}
+      onDragOver={handleNodeDragOver}
+      onDragLeave={handleNodeDragLeave}
+      onDrop={handleNodeDrop}
+    />
   );
 
   const filteredTree = (() => {
@@ -659,7 +753,7 @@ function FileTreeSection() {
               没有匹配的文件
             </div>
           ) : (
-            filteredTree.map((node) => renderNode(node))
+            filteredTree.map((node) => renderTreeNodeRow(node))
           )
         )}
       </div>

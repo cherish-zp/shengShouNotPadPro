@@ -7,7 +7,27 @@
 
 ## [未发布]
 
+### Performance
+- **Rust 后端**：全部重 IO 命令（读/写文件、目录列表、删除、贴图读取、编码探测等 13 个）
+  改为 `async fn` + `spawn_blocking`，不再阻塞主线程；编码探测从整文件四轮全量解码试探
+  改为采样前 64KB；`get_file_info` 流式数行（O(1) 内存，二进制文件不再误报 0 行）；
+  `read_file_bytes` 加 20MB 上限防内存放大。
+- **前端击键热路径**：状态栏行数走缓存（不再每击键 O(N) 全文切分）；光标更新加变化守卫；
+  tabs 更新浅比较去重（无变化跳过通知与持久化）；便签持久化跳过无变化写入；
+  设置写入 500ms 防抖；CodeMirror 内容同步 200ms 防抖（composition/blur 安全冲写）；
+  Markdown 预览 / 查找替换防抖；侧栏拖拽 rAF 节流；全局键盘监听只挂一次；
+  便签行与文件树行 memo 化。
+- **包体积**：vite manualChunks 分包——主 chunk 1.33MB → **145KB（-89%）**，
+  CodeMirror/react 独立 vendor chunk，DiffView 懒加载（diff 包随之按需拉取）。
+
 ### Changed
+- 删除死代码：后端 git_ops/search/state/utils 模块及 list_directory_recursive（前端零调用），
+  前端 keybindings/formatters 工具、假插件数据、git 包装与陈旧 mock；Cargo 依赖 16 → 10 项
+  （git2/regex/tokio/sha2/md-5/uuid/bytes/ignore/walkdir/dirs 移除），显著缩短编译时间。
+- 颜色工具合并到 `src/utils/color.ts` 并补 14 个单测（设置面板与工具面板共用，消除双份实现）。
+- CodeMirror 语法高亮改用 `--hl-*` CSS token（浅/深两套），修复深色主题下硬编码浅色
+  对比度错误；搜索匹配高亮同步 token 化。
+- `useTauri` 的浏览器 mock 仅在非 Tauri 环境生效（不再吞真实命令错误）。
 - CI：`assemble-updater-json` 与 `sync-gitee` 两个 job 的 runner 钉到 ubuntu-24.04
   （ubuntu-latest 将于 2026-10-19 起迁移 Ubuntu 26，避免清单组装环境漂移）。
 - Gitee 同步失败的报错改为可操作指引（令牌过期 / 缺 projects 权限时给出具体修复步骤）。

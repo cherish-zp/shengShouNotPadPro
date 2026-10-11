@@ -1,23 +1,25 @@
-import React, { useState, useRef } from "react";
+import React, { memo, useState, useRef, useCallback } from "react";
 import { X, Pin } from "lucide-react";
-import type { Tab, TabColor } from "@/types";
+import type { Tab } from "@/types";
 
 interface TabItemProps {
   tab: Tab;
   isActive: boolean;
-  onSelect: () => void;
-  onClose: () => void;
-  onRename: (name: string) => void;
-  onContextMenu: (e: React.MouseEvent) => void;
+  /** 回调统一按 tabId 传参：父级可以用 useCallback 提供稳定引用，配合 memo 跳过无关重渲染 */
+  onSelect: (tabId: string) => void;
+  onClose: (tabId: string) => void;
+  onRename: (tabId: string, name: string) => void;
+  onContextMenu: (e: React.MouseEvent, tabId: string) => void;
   /** 落点指示线相对本行的位置 */
   dropIndicator?: "above" | "below" | null;
   /** 拖拽排序：行在列表中的序号（写入 data-tab-index 供命中测试） */
   dataTabIndex?: number;
-  /** 拖拽排序：在行上按下指针时触发（父级监听 window 的 pointermove/up 完成排序） */
-  onRowPointerDown?: (e: React.PointerEvent) => void;
+  /** 拖拽排序：在行上按下指针时触发（父级监听 window 的 pointermove/up 完成排序）；
+   *  第二个参数为本行的 dataTabIndex */
+  onRowPointerDown?: (e: React.PointerEvent, tabIndex: number) => void;
 }
 
-export default function TabItem({
+function TabItem({
   tab,
   isActive,
   onSelect,
@@ -41,19 +43,24 @@ export default function TabItem({
   };
 
   const handleRename = () => {
-    if (editValue.trim()) onRename(editValue.trim());
+    if (editValue.trim()) onRename(tab.id, editValue.trim());
     setEditing(false);
   };
 
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => onRowPointerDown?.(e, dataTabIndex ?? -1),
+    [onRowPointerDown, dataTabIndex]
+  );
+
   return (
     <div
-      onClick={onSelect}
-      onContextMenu={onContextMenu}
+      onClick={() => onSelect(tab.id)}
+      onContextMenu={(e) => onContextMenu(e, tab.id)}
       onDoubleClick={handleDoubleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       data-tab-index={dataTabIndex}
-      onPointerDown={onRowPointerDown}
+      onPointerDown={onRowPointerDown ? handlePointerDown : undefined}
       style={{
         display: "flex",
         alignItems: "center",
@@ -192,7 +199,7 @@ export default function TabItem({
         {/* Close button - always visible for file tabs with filePath */}
         {(hovered || isActive || tab.filePath) && !editing && (
           <button
-            onClick={(e) => { e.stopPropagation(); onClose(); }}
+            onClick={(e) => { e.stopPropagation(); onClose(tab.id); }}
             style={{
               display: "flex",
               alignItems: "center",
@@ -222,3 +229,7 @@ export default function TabItem({
     </div>
   );
 }
+
+// memo：tab 对象引用仅在自身字段变化时更换，isActive/dropIndicator/dataTabIndex
+// 为原始值，回调由父级用 useCallback 稳定——其它便签击键时本行直接跳过重渲染
+export default memo(TabItem);

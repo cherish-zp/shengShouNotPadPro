@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Tab, TabColor } from "@/types";
 import { moveTab, moveTabByOffset, normalizeTabOrder, pinTab, unpinTab } from "@/utils/tabOrder";
+import { useEditorStore } from "./editorStore";
 
 const STORAGE_KEY = "novaedit-tabs";
 
@@ -10,13 +11,53 @@ interface PersistedState {
   nextTabNum: number;
 }
 
-// 防抖保存
+// ---------------- 行数缓存（模块级 Map，按 tabId 存行数） ----------------
+// 击键热路径上 StatusBar 等处若每次渲染都对全文 split("\n")，大文件开销明显；
+// 这里在内容变更时算一次并缓存，组件通过 getTabLineCount(tabId) 读取。
+const lineCounts = new Map<string, number>();
+
+/** 计算文本行数（与 content.split("\n").length 语义一致，空串算 1 行） */
+export function countLines(content: string): number {
+  return content.split("\n").length;
+}
+
+/** 读取 tab 的缓存行数；tab 不存在返回 undefined（组件层有 ?? 兜底） */
+export function getTabLineCount(tabId: string): number | undefined {
+  const cached = lineCounts.get(tabId);
+  if (cached !== undefined) return cached;
+  // 兜底：缓存缺失但 tab 存在（如外部直接 setState 注入）时现算一次并回填
+  const tab = useTabStore.getState().tabs.find((t) => t.id === tabId);
+  if (!tab) return undefined;
+  const n = countLines(tab.content);
+  lineCounts.set(tabId, n);
+  return n;
+}
+
+// ---------------- 持久化（300ms 防抖 + 变更去重） ----------------
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
-function debouncedSave(state: PersistedState) {
+// 内容发生变更的 tab id：updateContent/markDirty 加入，序列化落盘后清空，tab 关闭时移除
+const dirtyTabs = new Set<string>();
+// 非内容类变更（重命名/关闭/排序/markClean 等低频操作）也必须落盘，用独立标记保证不丢
+let needsPersist = false;
+
+function schedulePersist() {
+  needsPersist = true;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
+    saveTimer = null;
+    // 无任何待写变更时跳过序列化与写盘
+    if (!needsPersist && dirtyTabs.size === 0) return;
+    needsPersist = false;
+    dirtyTabs.clear();
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      // 触发时刻读取最新状态，一次 burst 只串行化并写入一次
+      const s = useTabStore.getState();
+      const snapshot: PersistedState = {
+        tabs: s.tabs,
+        activeTabId: s.activeTabId,
+        nextTabNum: s.nextTabNum,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     } catch (e) {
       console.error("保存便签失败:", e);
     }
@@ -33,6 +74,34 @@ function loadFromStorage(): PersistedState | null {
   }
 }
 
+/** tab 被移除时清理其簿记（行数缓存 + 脏标记） */
+function forgetTabBookkeeping(id: string) {
+  dirtyTabs.delete(id);
+  lineCounts.delete(id);
+}
+
+/**
+ * 单 tab 不可变更新：找到目标 tab 应用 patch 并返回新数组。
+ * id 不存在或 patch 与现值完全相同（浅比较）时返回原数组，
+ * 调用方据此跳过订阅通知与持久化调度（击键热路径去重的关键）。
+ */
+function applyTabPatch(tabs: Tab[], id: string, patch: Partial<Tab>): Tab[] {
+  const index = tabs.findIndex((t) => t.id === id);
+  if (index === -1) return tabs;
+  const target = tabs[index];
+  let changed = false;
+  for (const key of Object.keys(patch) as (keyof Tab)[]) {
+    if (target[key] !== patch[key]) {
+      changed = true;
+      break;
+    }
+  }
+  if (!changed) return tabs;
+  const next = tabs.slice();
+  next[index] = { ...target, ...patch };
+  return next;
+}
+
 interface TabStore {
   tabs: Tab[];
   activeTabId: string | null;
@@ -41,6 +110,8 @@ interface TabStore {
   hydrate: () => void;
   addTab: (tab?: Partial<Tab>) => Tab;
   closeTab: (id: string) => void;
+  /** 单 tab 不可变更新：内容无变化时为 no-op（不通知、不持久化） */
+  updateTab: (id: string, patch: Partial<Tab>) => void;
   renameTab: (id: string, name: string) => void;
   setActiveTab: (id: string) => void;
   updateContent: (id: string, content: string) => void;
@@ -62,16 +133,11 @@ interface TabStore {
   setFilePath: (id: string, path: string) => void;
 }
 
-// 包装 set，自动保存到 localStorage
+// 包装 set，自动调度防抖持久化
 function createPersistedSet(set: any, get: () => TabStore) {
   return (partial: any) => {
     set(partial);
-    const state = get();
-    debouncedSave({
-      tabs: state.tabs,
-      activeTabId: state.activeTabId,
-      nextTabNum: state.nextTabNum,
-    });
+    schedulePersist();
   };
 }
 
@@ -88,9 +154,14 @@ export const useTabStore = create<TabStore>((set, get) => {
     hydrate: () => {
       const stored = loadFromStorage();
       if (stored && stored.tabs && stored.tabs.length > 0) {
+        // 整理为「置顶区在前」的不变量顺序，兼容旧数据与外部改动
+        const tabs = normalizeTabOrder(stored.tabs);
+        lineCounts.clear();
+        for (const t of tabs) {
+          lineCounts.set(t.id, countLines(typeof t.content === "string" ? t.content : ""));
+        }
         set({
-          // 整理为「置顶区在前」的不变量顺序，兼容旧数据与外部改动
-          tabs: normalizeTabOrder(stored.tabs),
+          tabs,
           activeTabId: stored.activeTabId,
           nextTabNum: stored.nextTabNum || 1,
           hydrated: true,
@@ -121,6 +192,7 @@ export const useTabStore = create<TabStore>((set, get) => {
         color: tabData?.color,
         createdAt: Date.now(),
       };
+      lineCounts.set(id, countLines(newTab.content)); // 打开（含打开已有文件）/新建时算一次行数
 
       pset({
         tabs: [...state.tabs, newTab],
@@ -149,6 +221,9 @@ export const useTabStore = create<TabStore>((set, get) => {
       }
 
       pset({ tabs: newTabs, activeTabId: newActiveId });
+      forgetTabBookkeeping(id);
+      // 清理编辑器层的光标/滚动缓存，防止 Record 无界增长
+      useEditorStore.getState().releaseTabState(id);
 
       // 关闭草稿时清理其贴图暂存目录（火忘式，失败不影响关tab）
       void import("@/utils/imageBridge")
@@ -156,10 +231,15 @@ export const useTabStore = create<TabStore>((set, get) => {
         .catch(() => {});
     },
 
+    updateTab: (id: string, patch: Partial<Tab>) => {
+      const prev = get().tabs;
+      const next = applyTabPatch(prev, id, patch);
+      if (next === prev) return; // 无实际变化：跳过通知与持久化
+      pset({ tabs: next });
+    },
+
     renameTab: (id: string, name: string) => {
-      pset({
-        tabs: get().tabs.map((t) => (t.id === id ? { ...t, name } : t)),
-      });
+      get().updateTab(id, { name });
     },
 
     setActiveTab: (id: string) => {
@@ -167,57 +247,41 @@ export const useTabStore = create<TabStore>((set, get) => {
     },
 
     updateContent: (id: string, content: string) => {
-      pset({
-        tabs: get().tabs.map((t) =>
-          t.id === id ? { ...t, content, dirty: true } : t
-        ),
-      });
+      const tab = get().tabs.find((t) => t.id === id);
+      if (!tab) return;
+      if (tab.content === content && tab.dirty) return; // 热路径去重：内容与脏标均未变
+      lineCounts.set(id, countLines(content));
+      dirtyTabs.add(id);
+      get().updateTab(id, { content, dirty: true });
     },
 
     markDirty: (id: string) => {
-      pset({
-        tabs: get().tabs.map((t) => (t.id === id ? { ...t, dirty: true } : t)),
-      });
+      dirtyTabs.add(id);
+      get().updateTab(id, { dirty: true });
     },
 
     markClean: (id: string) => {
-      pset({
-        tabs: get().tabs.map((t) => (t.id === id ? { ...t, dirty: false } : t)),
-      });
+      get().updateTab(id, { dirty: false }); // 变更经 pset 记为 needsPersist，防抖窗口内也能落盘
     },
 
     setTabColor: (id: string, color: TabColor | undefined) => {
-      pset({
-        tabs: get().tabs.map((t) => (t.id === id ? { ...t, color } : t)),
-      });
+      get().updateTab(id, { color });
     },
 
     setTabEncoding: (id: string, encoding: string) => {
-      pset({
-        tabs: get().tabs.map((t) => (t.id === id ? { ...t, encoding } : t)),
-      });
+      get().updateTab(id, { encoding });
     },
 
     setTabLanguage: (id: string, language: string) => {
-      pset({
-        tabs: get().tabs.map((t) => (t.id === id ? { ...t, language } : t)),
-      });
+      get().updateTab(id, { language });
     },
 
     setTabLineEnding: (id: string, lineEnding: "LF" | "CRLF") => {
-      pset({
-        tabs: get().tabs.map((t) =>
-          t.id === id ? { ...t, lineEnding } : t
-        ),
-      });
+      get().updateTab(id, { lineEnding });
     },
 
     setTabIndent: (id: string, size: number, type: "spaces" | "tab") => {
-      pset({
-        tabs: get().tabs.map((t) =>
-          t.id === id ? { ...t, indentSize: size, indentType: type } : t
-        ),
-      });
+      get().updateTab(id, { indentSize: size, indentType: type });
     },
 
     reorderTabs: (fromIndex: number, toIndex: number) => {
@@ -242,14 +306,22 @@ export const useTabStore = create<TabStore>((set, get) => {
     },
 
     closeOthers: (id: string) => {
-      pset({
-        tabs: get().tabs.filter((t) => t.id === id),
-        activeTabId: id,
-      });
+      const removed = get().tabs.filter((t) => t.id !== id);
+      pset({ tabs: get().tabs.filter((t) => t.id === id), activeTabId: id });
+      for (const t of removed) {
+        forgetTabBookkeeping(t.id);
+        useEditorStore.getState().releaseTabState(t.id);
+      }
     },
 
     closeAll: () => {
+      const removed = get().tabs;
       pset({ tabs: [], activeTabId: null });
+      dirtyTabs.clear();
+      lineCounts.clear();
+      for (const t of removed) {
+        useEditorStore.getState().releaseTabState(t.id);
+      }
     },
 
     closeTabsToRight: (id: string) => {
@@ -261,6 +333,10 @@ export const useTabStore = create<TabStore>((set, get) => {
         ? state.activeTabId
         : id;
       pset({ tabs: newTabs, activeTabId: activeId });
+      for (const t of state.tabs.slice(index + 1)) {
+        forgetTabBookkeeping(t.id);
+        useEditorStore.getState().releaseTabState(t.id);
+      }
     },
 
     duplicateTab: (id: string) => {
@@ -278,13 +354,9 @@ export const useTabStore = create<TabStore>((set, get) => {
     },
 
     setFilePath: (id: string, path: string) => {
-      pset({
-        tabs: get().tabs.map((t) =>
-          t.id === id
-            ? { ...t, filePath: path, name: path.split("/").pop() || t.name }
-            : t
-        ),
-      });
+      const tab = get().tabs.find((t) => t.id === id);
+      if (!tab) return;
+      get().updateTab(id, { filePath: path, name: path.split("/").pop() || tab.name });
     },
   };
 });

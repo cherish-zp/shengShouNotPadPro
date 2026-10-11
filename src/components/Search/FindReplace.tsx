@@ -25,10 +25,19 @@ export default function FindReplace() {
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
+  // 内容变化走 200ms 防抖：击键时不立刻全量正则扫描；
+  // 搜索词 / 开关变化仍即时（用当前已防抖的内容立即重算）
+  const activeContent = activeTab?.content ?? "";
+  const [debouncedContent, setDebouncedContent] = useState(activeContent);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedContent(activeContent), 200);
+    return () => clearTimeout(timer);
+  }, [activeContent]);
+
   // 计算所有匹配项，使用绝对位置（from, to）
   const matches = useMemo<Match[]>(() => {
     if (!activeTab || !query) return [];
-    const content = activeTab.content;
+    const content = debouncedContent;
     const results: Match[] = [];
 
     try {
@@ -55,7 +64,10 @@ export default function FindReplace() {
       // 正则错误
     }
     return results;
-  }, [query, caseSensitive, useRegex, activeTab?.content]);
+    // 依赖用 activeTabId 而非 activeTab：内容更新会替换 tab 对象引用，
+    // 依赖对象本身会让防抖失效（内容重算只由 debouncedContent 驱动）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, caseSensitive, useRegex, debouncedContent, activeTabId]);
 
   // 当搜索框打开时聚焦
   useEffect(() => {

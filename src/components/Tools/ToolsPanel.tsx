@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useTabStore } from "@/store/tabStore";
+import { hexToRgb, normalizeHex, rgbToHsl } from "@/utils/color";
 
 const TOOLS = [
   { id: "json", label: "JSON 格式化" },
@@ -8,44 +9,6 @@ const TOOLS = [
   { id: "color", label: "颜色" },
   { id: "regex", label: "正则" },
 ];
-
-// 把任何输入（#fff / fff / #ffffff / ffffff）规范化为 #rrggbb 小写
-function normalizeHex(input: string): string {
-  let s = (input || "").trim().toLowerCase();
-  if (s.startsWith("#")) s = s.slice(1);
-  if (/^[0-9a-f]{3}$/.test(s)) {
-    s = s.split("").map((c) => c + c).join("");
-  }
-  if (!/^[0-9a-f]{6}$/.test(s)) return "#000000";
-  return "#" + s;
-}
-
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const h = normalizeHex(hex).slice(1);
-  return {
-    r: parseInt(h.slice(0, 2), 16),
-    g: parseInt(h.slice(2, 4), 16),
-    b: parseInt(h.slice(4, 6), 16),
-  };
-}
-
-function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
-  const rn = r / 255, gn = g / 255, bn = b / 255;
-  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
-  let h = 0, s = 0;
-  const l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case rn: h = (gn - bn) / d + (gn < bn ? 6 : 0); break;
-      case gn: h = (bn - rn) / d + 2; break;
-      case bn: h = (rn - gn) / d + 4; break;
-    }
-    h /= 6;
-  }
-  return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
-}
 
 export default function ToolsPanel() {
   const [activeTool, setActiveTool] = useState("json");
