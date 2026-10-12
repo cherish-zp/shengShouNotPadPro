@@ -10,6 +10,8 @@ import { removeNodeByPath, findTabsForDeletion, buildTargetPath, isSameOrAncesto
 import { FILE_RENAMED_EVENT, renameTabPersisted } from "@/utils/tabRename";
 import { tabMoveBounds } from "@/utils/tabOrder";
 import { classifyFileExtension } from "@/utils/quarantine";
+import { openPathAsTab, languageForPath } from "@/utils/openFile";
+import { useTauri } from "@/hooks/useTauri";
 import { toast } from "@/utils/toast";
 import { fileSizeLimitMessage, getFileSizeBytes, isFileSizeOverLimit } from "@/utils/fileSize";
 import { scrollContainerStyle } from "./panelLayout";
@@ -421,6 +423,7 @@ function FileTreeSection() {
     try { return localStorage.getItem("npp-show-hidden") === "true"; } catch { return false; }
   });
   const setFilePath = useTabStore((s) => s.setFilePath);
+  const { readFile, detectEncoding } = useTauri();
 
   const toggleShowHidden = () => {
     setShowHidden((prev) => {
@@ -497,10 +500,16 @@ function FileTreeSection() {
         if (safety !== "caution") {
           invoke("remove_quarantine", { path: node.path, recursive: false }).catch(() => {});
         }
-        const result = await invoke<{ content: string; encoding: string }>("read_file", { path: node.path, encoding: "UTF-8" });
-        addTab({ name: node.name, filePath: node.path, content: result.content, encoding: result.encoding });
+        // 共享打开管线：编码检测（失败回落 UTF-8）+ 语言推断 + addTab
+        await openPathAsTab(node.path, { detectEncoding, readFile });
       } catch {
-        addTab({ name: node.name, filePath: node.path, content: "" });
+        // 读取失败兜底：建空 tab，保留文件名与语言
+        addTab({
+          name: node.name,
+          filePath: node.path,
+          content: "",
+          language: languageForPath(node.path),
+        });
       }
       return;
     }
@@ -529,7 +538,7 @@ function FileTreeSection() {
         );
       } catch { /* ignore */ }
     }
-  }, [addTab]);
+  }, [addTab, detectEncoding, readFile]);
 
   const handleConfirmDelete = async () => {
     if (!confirmDelete) return;

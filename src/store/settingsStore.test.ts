@@ -21,7 +21,7 @@ class MemStorage {
 beforeEach(() => {
   vi.stubGlobal("localStorage", new MemStorage());
   // 只重置测试涉及的字段，避免用例间串扰（不触碰需要 DOM 的视觉字段）
-  useSettingsStore.setState({ fontSize: 14, sidebarWidth: 240 });
+  useSettingsStore.setState({ fontSize: 14 });
 });
 
 afterEach(() => {
@@ -71,5 +71,23 @@ describe("settingsStore 持久化防抖", () => {
     useSettingsStore.getState().saveSettings();
     const saved = JSON.parse(localStorage.getItem("novaedit-settings")!);
     expect(saved.fontSize).toBe(14);
+  });
+});
+
+describe("loadSettings 旧版本遗留键清理", () => {
+  it("忽略旧 localStorage 残留的 sidebarWidth 键，不将其混入 state", () => {
+    // loadSettings 内部会调用 apply* 系列写 documentElement/body，需按 resetDefaults 用例的方式 stub document
+    vi.stubGlobal("document", {
+      documentElement: {
+        classList: { remove: vi.fn(), add: vi.fn(), toggle: vi.fn() },
+        style: { setProperty: vi.fn(), removeProperty: vi.fn() },
+      },
+      body: { style: {} },
+    });
+    localStorage.setItem("novaedit-settings", JSON.stringify({ fontSize: 18, sidebarWidth: 999 }));
+    useSettingsStore.getState().loadSettings();
+    const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
+    expect(state.fontSize).toBe(18); // 正常键照常生效
+    expect("sidebarWidth" in state).toBe(false); // 遗留键被防御性删除
   });
 });

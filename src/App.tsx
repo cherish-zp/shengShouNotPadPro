@@ -3,12 +3,13 @@ import MainLayout from "@/components/Layout/MainLayout";
 import UpdateBanner from "@/components/Update/UpdateBanner";
 import { useKeyboard } from "@/hooks/useKeyboard";
 import { useAutoSave } from "@/hooks/useAutoSave";
+import { useTauri } from "@/hooks/useTauri";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTabStore } from "@/store/tabStore";
 import { useEditorStore } from "@/store/editorStore";
 import { useUpdateStore } from "@/store/updateStore";
-import { detectLanguageFromExtension } from "@/utils/encoding";
 import { classifyFileExtension } from "@/utils/quarantine";
+import { languageForPath, openPathAsTab } from "@/utils/openFile";
 import { toast } from "@/utils/toast";
 import { fileSizeLimitMessage, getFileSizeBytes, isFileSizeOverLimit } from "@/utils/fileSize";
 
@@ -16,10 +17,10 @@ export default function App() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const theme = useSettingsStore((s) => s.theme);
   const hydrate = useTabStore((s) => s.hydrate);
-  const addTab = useTabStore((s) => s.addTab);
   const addOpenFolder = useEditorStore((s) => s.addOpenFolder);
   const openSidebarView = useEditorStore((s) => s.openSidebarView);
   const startAutoCheck = useUpdateStore((s) => s.startAutoCheck);
+  const { readFile, detectEncoding } = useTauri();
 
   useEffect(() => {
     // 加载设置和便签数据
@@ -44,8 +45,6 @@ export default function App() {
           const paths = event.payload;
           for (const path of paths) {
             const name = path.split(/[\\/]/).pop() || path;
-            const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
-            const language = detectLanguageFromExtension(ext);
             const safety = classifyFileExtension(name);
             try {
               // 超过大小上限的文件直接拦截，避免整读进内存
@@ -58,19 +57,13 @@ export default function App() {
               if (safety !== "caution") {
                 invoke("remove_quarantine", { path, recursive: false }).catch(() => {});
               }
-              const result = await invoke<{ content: string; encoding: string }>(
-                "read_file",
-                { path, encoding: "UTF-8" }
-              );
-              addTab({
-                name,
-                filePath: path,
-                content: result.content,
-                encoding: result.encoding,
-                language,
-              });
+              // 共享打开管线：编码检测（失败回落 UTF-8）+ 语言推断 + addTab
+              await openPathAsTab(path, { detectEncoding, readFile });
             } catch {
-              addTab({ name, filePath: path, content: "", language });
+              // 读取失败兜底：建空 tab，保留文件名与语言
+              useTabStore
+                .getState()
+                .addTab({ name, filePath: path, content: "", language: languageForPath(path) });
             }
           }
         });
@@ -96,7 +89,7 @@ export default function App() {
       if (unlistenFiles) unlistenFiles();
       if (unlistenFolders) unlistenFolders();
     };
-  }, [addTab, addOpenFolder, openSidebarView]);
+  }, [readFile, detectEncoding, addOpenFolder, openSidebarView]);
 
   // Apply theme: 默认 :root 是浅色，dark / system(dark) 才加 .dark
   useEffect(() => {

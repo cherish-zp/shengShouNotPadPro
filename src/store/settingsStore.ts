@@ -26,7 +26,6 @@ const DEFAULTS: AppSettings = {
   autoSaveInterval: 30000,
   showLineNumbers: true,
   accentColor: "#2563EB",
-  sidebarWidth: 240,
   windowOpacity: 1,
 };
 
@@ -96,6 +95,9 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
       const saved = localStorage.getItem(SETTINGS_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
+        // 旧版本遗留键清理：sidebarWidth 已是 MainLayout 本地 state，不再属于设置项，
+        // 防止旧 localStorage 残留的键经 {...DEFAULTS, ...parsed} 混入未类型化 state
+        delete (parsed as Record<string, unknown>).sidebarWidth;
         set({ ...DEFAULTS, ...parsed });
         applyTheme(parsed.theme || DEFAULTS.theme);
         applySkin(parsed.skin || DEFAULTS.skin, parsed.accentColor || DEFAULTS.accentColor);
@@ -128,7 +130,6 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         autoSaveInterval: state.autoSaveInterval,
         showLineNumbers: state.showLineNumbers,
         accentColor: state.accentColor,
-        sidebarWidth: state.sidebarWidth,
         windowOpacity: state.windowOpacity,
       };
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));

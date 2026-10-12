@@ -21,6 +21,12 @@
   CodeMirror/react 独立 vendor chunk，DiffView 懒加载（diff 包随之按需拉取）。
 
 ### Changed
+- **打开文件流水线三份实现合并**到 `src/utils/openFile.ts`（编码检测失败回落 UTF-8、
+  语言推断、大小拦截的标准顺序）；修复 App.tsx 固定 UTF-8 与文件树点击丢语言两处漂移，
+  新增 10 个单测。
+- 设置面板 React.lazy 化（独立 chunk 12KB，打开设置时按需加载）。
+- 移除死设置 `sidebarWidth`（实际布局一直是 MainLayout 本地状态），并防御性清理旧
+  localStorage 遗留键。
 - 删除死代码：后端 git_ops/search/state/utils 模块及 list_directory_recursive（前端零调用），
   前端 keybindings/formatters 工具、假插件数据、git 包装与陈旧 mock；Cargo 依赖 16 → 10 项
   （git2/regex/tokio/sha2/md-5/uuid/bytes/ignore/walkdir/dirs 移除），显著缩短编译时间。

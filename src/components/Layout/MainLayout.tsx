@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { lazy, Suspense, useState, useRef, useEffect } from "react";
 import { useEditorStore } from "@/store/editorStore";
 import { useTabStore } from "@/store/tabStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -13,7 +13,9 @@ import DiffView from "@/components/Diff/DiffView";
 import CommandPalette from "@/components/CommandPalette/CommandPalette";
 import QuickOpen from "@/components/Search/QuickOpen";
 import GoToLine from "@/components/Search/GoToLine";
-import SettingsPanel from "@/components/Settings/SettingsPanel";
+// SettingsPanel 较重（含关于/更新检查等），lazy 分包避免进主 chunk；
+// 打开设置时才加载，加载期间由下方 Suspense fallback 显示占位卡片
+const SettingsPanel = lazy(() => import("@/components/Settings/SettingsPanel"));
 
 export default function MainLayout() {
   const sidebarVisible = useEditorStore((s) => s.sidebarVisible);
@@ -28,7 +30,7 @@ export default function MainLayout() {
   const backgroundDim = useSettingsStore((s) => s.backgroundDim);
   const backgroundBlur = useSettingsStore((s) => s.backgroundBlur);
   const hasImage = !!backgroundImage;
-  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [panelWidth, setPanelWidth] = useState(300);
   const [isResizing, setIsResizing] = useState(false);
   // 拖拽侧边栏：mousemove 高频触发，用 rAF 节流为每帧最多一次 setState
   const resizeRafRef = useRef<number | null>(null);
@@ -45,7 +47,7 @@ export default function MainLayout() {
     e.preventDefault();
     setIsResizing(true);
     const startX = e.clientX;
-    const startWidth = sidebarWidth;
+    const startWidth = panelWidth;
 
     const onMouseMove = (e: MouseEvent) => {
       const diff = e.clientX - startX;
@@ -54,7 +56,7 @@ export default function MainLayout() {
         resizeRafRef.current = requestAnimationFrame(() => {
           resizeRafRef.current = null;
           if (pendingWidthRef.current !== null) {
-            setSidebarWidth(pendingWidthRef.current);
+            setPanelWidth(pendingWidthRef.current);
             pendingWidthRef.current = null;
           }
         });
@@ -68,7 +70,7 @@ export default function MainLayout() {
         resizeRafRef.current = null;
       }
       if (pendingWidthRef.current !== null) {
-        setSidebarWidth(pendingWidthRef.current);
+        setPanelWidth(pendingWidthRef.current);
         pendingWidthRef.current = null;
       }
       setIsResizing(false);
@@ -94,7 +96,7 @@ export default function MainLayout() {
         {sidebarVisible && (
           <div
             style={{
-              width: sidebarWidth, flexShrink: 0,
+              width: panelWidth, flexShrink: 0,
               display: "flex", overflow: "hidden",
               animation: "slideInLeft 250ms cubic-bezier(0.4, 0, 0.2, 1)",
             }}
@@ -139,7 +141,19 @@ export default function MainLayout() {
       {commandPaletteOpen && <CommandPalette />}
       {quickOpenOpen && <QuickOpen />}
       {goToLineOpen && <GoToLine />}
-      {settingsOpen && <SettingsPanel />}
+      {settingsOpen && (
+        <Suspense
+          fallback={
+            // 占位卡片：对齐 SettingsPanel 弹窗的位置与尺寸，只用主题变量随主题走；
+            // 不放遮罩层，避免与真实面板自带的 Modal 遮罩叠加闪屏
+            <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 640, height: 480, background: "var(--bg-surface)", borderRadius: 16 }} />
+            </div>
+          }
+        >
+          <SettingsPanel />
+        </Suspense>
+      )}
     </div>
   );
 }

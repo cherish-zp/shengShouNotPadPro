@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTabStore } from "@/store/tabStore";
 import { useTauri } from "@/hooks/useTauri";
-import { detectLanguageFromExtension } from "@/utils/encoding";
+import { openPathAsTab, languageForPath } from "@/utils/openFile";
 import { useEditorStore } from "@/store/editorStore";
 import { partitionDroppedPaths, type DroppedItem } from "@/utils/dropHandler";
 import { classifyFileExtension } from "@/utils/quarantine";
@@ -34,8 +34,6 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
   // 通过文件路径打开（Tauri 环境）
   const openByPath = async (path: string) => {
     const name = path.split(/[\\/]/).pop() || path;
-    const ext = name.includes(".") ? name.split(".").pop() ?? "" : "";
-    const language = detectLanguageFromExtension(ext);
     const safety = classifyFileExtension(name);
     try {
       // 超过大小上限的文件直接拦截，不读内容也不建标签页
@@ -50,21 +48,8 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
           invoke("remove_quarantine", { path, recursive: false }).catch(() => {});
         }).catch(() => {});
       }
-      // 先尝试自动检测编码，失败则回落到 UTF-8
-      let encoding = "UTF-8";
-      try {
-        encoding = await detectEncoding(path);
-      } catch {
-        // ignore
-      }
-      const result = await readFile(path, encoding);
-      addTab({
-        name,
-        filePath: path,
-        content: result.content,
-        encoding: result.encoding || encoding,
-        language,
-      });
+      // 共享打开管线：编码检测（失败回落 UTF-8）+ 语言推断 + addTab
+      await openPathAsTab(path, { detectEncoding, readFile });
     } catch (err) {
       console.error("打开拖入文件失败:", path, err);
     }
@@ -84,7 +69,7 @@ export function useFileDrop(options: UseFileDropOptions = {}) {
       });
       return;
     }
-    const language = detectLanguageFromExtension(ext);
+    const language = languageForPath(file.name);
     try {
       // 浏览器 File 对象可直接取到大小，超限则提示并阻止读取
       if (isFileSizeOverLimit(file.size)) {

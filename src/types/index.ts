@@ -103,6 +103,5 @@ export interface AppSettings {
   autoSaveInterval: number;
   showLineNumbers: boolean;
   accentColor: string;
-  sidebarWidth: number;
   windowOpacity: number;
 }
