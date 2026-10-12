@@ -5,7 +5,7 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本 2.0.0](https://semver.org/lang/zh-CN/)。
 
-## [未发布]
+## [0.2.2] - 2026-10-12
 
 ### Performance
 - **Rust 后端**：全部重 IO 命令（读/写文件、目录列表、删除、贴图读取、编码探测等 13 个）
