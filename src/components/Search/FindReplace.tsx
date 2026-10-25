@@ -1,17 +1,11 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { X, ChevronUp, ChevronDown, Regex, CaseSensitive, Replace, ReplaceAll } from "lucide-react";
 import { EditorSelection } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
 import { useSearchStore } from "@/store/searchStore";
 import { useTabStore } from "@/store/tabStore";
 import { useEditorStore } from "@/store/editorStore";
-
-interface Match {
-  from: number;
-  to: number;
-  line: number;
-  col: number;
-}
+import { computeMatches } from "@/utils/searchMatches";
+import { setSearchMatches } from "@/utils/cm/searchHighlight";
 
 export default function FindReplace() {
   const { isOpen, mode, query, replaceQuery, caseSensitive, useRegex,
@@ -34,36 +28,10 @@ export default function FindReplace() {
     return () => clearTimeout(timer);
   }, [activeContent]);
 
-  // 计算所有匹配项，使用绝对位置（from, to）
-  const matches = useMemo<Match[]>(() => {
+  // 计算所有匹配项（纯函数，位置为文档内绝对偏移）
+  const matches = useMemo(() => {
     if (!activeTab || !query) return [];
-    const content = debouncedContent;
-    const results: Match[] = [];
-
-    try {
-      const searchQuery = useRegex ? query : query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const re = new RegExp(searchQuery, caseSensitive ? "g" : "gi");
-
-      // 用于行号计算
-      let match;
-      while ((match = re.exec(content)) !== null) {
-        if (match[0].length === 0) {
-          re.lastIndex++; // 避免空匹配死循环
-          continue;
-        }
-        const from = match.index;
-        const to = from + match[0].length;
-        // 计算行号和列号
-        const before = content.substring(0, from);
-        const line = before.split("\n").length;
-        const lastNewline = before.lastIndexOf("\n");
-        const col = from - lastNewline;
-        results.push({ from, to, line, col });
-      }
-    } catch {
-      // 正则错误
-    }
-    return results;
+    return computeMatches(debouncedContent, query, { caseSensitive, useRegex });
     // 依赖用 activeTabId 而非 activeTab：内容更新会替换 tab 对象引用，
     // 依赖对象本身会让防抖失效（内容重算只由 debouncedContent 驱动）
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -79,45 +47,40 @@ export default function FindReplace() {
     setCurrentIndex(0);
   }, [query, caseSensitive, useRegex]);
 
-  // 跳转到当前匹配并高亮选中
-  const jumpToMatch = (idx: number) => {
-    if (!editorView || matches.length === 0) return;
-    const match = matches[idx];
-    if (!match) return;
-
-    editorView.dispatch({
-      selection: EditorSelection.single(match.from, match.to),
-      effects: EditorView.scrollIntoView(match.from, { y: "center" }),
-    });
-    editorView.focus();
-  };
-
-  // 当 matches 变化时自动跳转到第一个
+  // 匹配结果收缩时把计数拉回有效范围
   useEffect(() => {
-    if (matches.length > 0) {
-      jumpToMatch(0);
-    } else if (editorView) {
-      // 没有匹配时清除高亮
-      const pos = editorView.state.selection.main.head;
-      editorView.dispatch({
-        selection: EditorSelection.single(pos),
-      });
+    if (matches.length === 0) {
+      if (currentIndex !== 0) setCurrentIndex(0);
+    } else if (currentIndex >= matches.length) {
+      setCurrentIndex(0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matches]);
+  }, [matches, currentIndex]);
+
+  // 查询高亮：只推装饰（标记全部匹配 + 当前三项加深），
+  // 不改编辑器选区、不移动光标、不抢焦点（v0.2.2 用户反馈）
+  useEffect(() => {
+    if (!editorView) return;
+    setSearchMatches(
+      editorView,
+      matches.map((m, i) => ({ from: m.from, to: m.to, selected: i === currentIndex }))
+    );
+  }, [matches, currentIndex, editorView]);
+
+  // 面板卸载（关闭搜索）时清掉编辑器里的查询高亮
+  const editorViewRef = useRef(editorView);
+  editorViewRef.current = editorView;
+  useEffect(() => () => {
+    if (editorViewRef.current) setSearchMatches(editorViewRef.current, []);
+  }, []);
 
   const nextMatch = () => {
     if (matches.length === 0) return;
-    const newIdx = (currentIndex + 1) % matches.length;
-    setCurrentIndex(newIdx);
-    jumpToMatch(newIdx);
+    setCurrentIndex((currentIndex + 1) % matches.length);
   };
 
   const prevMatch = () => {
     if (matches.length === 0) return;
-    const newIdx = currentIndex <= 0 ? matches.length - 1 : currentIndex - 1;
-    setCurrentIndex(newIdx);
-    jumpToMatch(newIdx);
+    setCurrentIndex(currentIndex <= 0 ? matches.length - 1 : currentIndex - 1);
   };
 
   const handleClose = () => {

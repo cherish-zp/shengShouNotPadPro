@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from "react";
 import { EditorView, keymap, lineNumbers, highlightActiveLineGutter, highlightSpecialChars, drawSelection, highlightActiveLine } from "@codemirror/view";
 import { EditorState, type Extension, Compartment } from "@codemirror/state";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentLess } from "@codemirror/commands";
 import { syntaxHighlighting, indentOnInput, bracketMatching, foldGutter, foldKeymap, HighlightStyle } from "@codemirror/language";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
@@ -23,6 +23,8 @@ import { useTabStore } from "@/store/tabStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useEditorStore } from "@/store/editorStore";
 import { middleButtonRectSelection } from "@/utils/cm/rectSelection";
+import { searchHighlightExtension } from "@/utils/cm/searchHighlight";
+import { smartTab } from "@/utils/cm/tabIndent";
 import { inlineImages } from "@/utils/cm/imageWidgets";
 import { insertImageBytes } from "@/utils/imagePasteFlow";
 import { baseDirOfFilePath, isPasteSupported } from "@/utils/imagePaste";
@@ -172,6 +174,7 @@ const staticBaseExtensions: Extension[] = [
   highlightActiveLine(),
   highlightActiveLineGutter(),
   highlightSelectionMatches(),
+  searchHighlightExtension,
   middleButtonRectSelection(),
   keymap.of([
     ...closeBracketsKeymap,
@@ -181,7 +184,8 @@ const staticBaseExtensions: Extension[] = [
     ...foldKeymap,
     ...completionKeymap,
     ...lintKeymap,
-    indentWithTab,
+    // Tab：无选区在光标处插入缩进空格（不再整行右移），有选区缩进所选行
+    { key: "Tab", run: smartTab, shift: indentLess },
   ]),
   themeCompartment.of(makeTheme()),
 ];
