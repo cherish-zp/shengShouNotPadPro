@@ -1,13 +1,12 @@
 import React, { lazy, Suspense, useState, useRef, useEffect } from "react";
 import { useEditorStore } from "@/store/editorStore";
-import { useTabStore } from "@/store/tabStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { backgroundToCssUrl } from "@/utils/background";
 import { SidebarRail, SidebarContent } from "./Sidebar";
+import TitleBar from "./TitleBar";
 import StatusBar from "./StatusBar";
 import BackgroundLayer from "./BackgroundLayer";
 import EditorContainer from "@/components/Editor/EditorContainer";
-import EditorToolbar from "@/components/Editor/EditorToolbar";
 import FindReplace from "@/components/Search/FindReplace";
 import DiffView from "@/components/Diff/DiffView";
 import CommandPalette from "@/components/CommandPalette/CommandPalette";
@@ -24,7 +23,6 @@ export default function MainLayout() {
   const quickOpenOpen = useEditorStore((s) => s.quickOpenOpen);
   const goToLineOpen = useEditorStore((s) => s.goToLineOpen);
   const diffViewOpen = useEditorStore((s) => s.diffViewOpen);
-  const activeTabId = useTabStore((s) => s.activeTabId);
   const skin = useSettingsStore((s) => s.skin);
   const backgroundImage = useSettingsStore((s) => s.backgroundImage);
   const backgroundDim = useSettingsStore((s) => s.backgroundDim);
@@ -88,6 +86,10 @@ export default function MainLayout() {
       {hasImage && (
         <BackgroundLayer url={backgroundToCssUrl(backgroundImage)} dim={backgroundDim} blur={backgroundBlur} />
       )}
+
+      {/* 自绘顶栏（全宽）：标题 + 高频动作 + ⚙ 设置，替代原生标题栏 + 工具栏两行 */}
+      <TitleBar />
+
       <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}>
         {/* 固定左侧图标栏：始终可见 */}
         <SidebarRail />
@@ -125,9 +127,6 @@ export default function MainLayout() {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
           {/* Search bar overlay */}
           <FindReplace />
-
-          {/* 顶部工具栏 */}
-          <EditorToolbar tabId={activeTabId ?? undefined} />
 
           {/* 主体：编辑器 / Diff */}
           {diffViewOpen ? <DiffView /> : <EditorContainer />}
