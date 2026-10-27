@@ -4,6 +4,9 @@ import { moveTab, moveTabByOffset, normalizeTabOrder, pinTab, unpinTab } from "@
 import { useEditorStore } from "./editorStore";
 
 const STORAGE_KEY = "novaedit-tabs";
+// 超过此长度的正文不写入 localStorage（quota 约 5-10MB，且每 300ms 序列化
+// 几十 MB 会持续烧 CPU）：快照里省略正文并标 contentOmitted，重开时从磁盘回读
+export const PERSIST_CONTENT_LIMIT = 1024 * 1024;
 
 interface PersistedState {
   tabs: Tab[];
@@ -50,10 +53,13 @@ function schedulePersist() {
     needsPersist = false;
     dirtyTabs.clear();
     try {
-      // 触发时刻读取最新状态，一次 burst 只串行化并写入一次
+      // 触发时刻读取最新状态，一次 burst 只串行化并写入一次。
+      // 超限正文省略（v0.2.3 大文件支持）：防止 localStorage 超配额与巨量序列化
       const s = useTabStore.getState();
       const snapshot: PersistedState = {
-        tabs: s.tabs,
+        tabs: s.tabs.map((t) =>
+          t.content.length > PERSIST_CONTENT_LIMIT ? { ...t, content: "", contentOmitted: true } : t
+        ),
         activeTabId: s.activeTabId,
         nextTabNum: s.nextTabNum,
       };
@@ -108,13 +114,20 @@ interface TabStore {
   nextTabNum: number;
   hydrated: boolean;
   hydrate: () => void;
-  addTab: (tab?: Partial<Tab>) => Tab;
+  addTab: (tab?: Partial<Tab> & { lineCount?: number }) => Tab;
+  /** 大文件支持：把持久化时省略正文的文件标签从磁盘回读（内容直写内存，不入 localStorage） */
+  reloadOmittedTabs: (deps: {
+    readFile: (
+      path: string,
+      encoding: string
+    ) => Promise<{ content: string; encoding: string; line_count: number }>;
+  }) => Promise<void>;
   closeTab: (id: string) => void;
   /** 单 tab 不可变更新：内容无变化时为 no-op（不通知、不持久化） */
   updateTab: (id: string, patch: Partial<Tab>) => void;
   renameTab: (id: string, name: string) => void;
   setActiveTab: (id: string) => void;
-  updateContent: (id: string, content: string) => void;
+  updateContent: (id: string, content: string, lineCount?: number) => void;
   markDirty: (id: string) => void;
   markClean: (id: string) => void;
   setTabColor: (id: string, color: TabColor | undefined) => void;
@@ -171,7 +184,26 @@ export const useTabStore = create<TabStore>((set, get) => {
       }
     },
 
-    addTab: (tabData?: Partial<Tab>) => {
+    // 大文件支持：内容超持久化上限的文件标签，正文在 localStorage 里被省略——
+    // 重开应用后从这里按 filePath 从磁盘回读（异步火忘式，失败保持置脏）。
+    // 注意：脏编辑（未保存修改）不参与回读，恢复的是磁盘上的内容。
+    reloadOmittedTabs: async (deps) => {
+      const { readFile } = deps;
+      const omitted = get().tabs.filter((t) => t.contentOmitted && t.filePath);
+      for (const tab of omitted) {
+        try {
+          const result = await readFile(tab.filePath as string, tab.encoding || "UTF-8");
+          get().updateContent(tab.id, result.content, result.line_count);
+          get().markClean(tab.id);
+          get().updateTab(tab.id, { contentOmitted: false });
+        } catch (err) {
+          console.error("回读大文件失败，保持置脏以便重试:", tab.filePath, err);
+          get().markDirty(tab.id);
+        }
+      }
+    },
+
+    addTab: (tabData) => {
       const state = get();
       const id = crypto.randomUUID();
       const num = state.nextTabNum;
@@ -192,7 +224,8 @@ export const useTabStore = create<TabStore>((set, get) => {
         color: tabData?.color,
         createdAt: Date.now(),
       };
-      lineCounts.set(id, countLines(newTab.content)); // 打开（含打开已有文件）/新建时算一次行数
+      // 行数优先用调用方传入的（后端 line_count，O(1)），否则现算一次
+      lineCounts.set(id, tabData?.lineCount ?? countLines(newTab.content));
 
       pset({
         tabs: [...state.tabs, newTab],
@@ -246,11 +279,13 @@ export const useTabStore = create<TabStore>((set, get) => {
       pset({ activeTabId: id });
     },
 
-    updateContent: (id: string, content: string) => {
+    updateContent: (id: string, content: string, lineCount?: number) => {
       const tab = get().tabs.find((t) => t.id === id);
       if (!tab) return;
       if (tab.content === content && tab.dirty) return; // 热路径去重：内容与脏标均未变
-      lineCounts.set(id, countLines(content));
+      // 行数优先取显式传入（CodeMirror doc.lines，O(1)）；
+      // 未传时回退全文 split——大文件下调用方必须传，否则每击键都会 O(N)
+      lineCounts.set(id, lineCount ?? countLines(content));
       dirtyTabs.add(id);
       get().updateTab(id, { content, dirty: true });
     },

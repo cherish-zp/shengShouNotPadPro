@@ -10,6 +10,8 @@ export interface Tab {
   indentSize: number;
   indentType: "spaces" | "tab";
   dirty: boolean;
+  /** 内容超过持久化上限（1MB）：localStorage 里省略正文，仅保留元数据；filePath 存在时重开自动从磁盘回读 */
+  contentOmitted?: boolean;
   color?: string;
   /** 置顶：钉在列表置顶区（数组前段），pinnedAt 用于区内排序（最近置顶在最上） */
   pinned?: boolean;

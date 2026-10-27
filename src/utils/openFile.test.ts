@@ -42,7 +42,7 @@ describe("loadFileContent", () => {
     const r = await loadFileContent("/f.txt", deps);
     expect(deps.detectEncoding).toHaveBeenCalledWith("/f.txt");
     expect(deps.readFile).toHaveBeenCalledWith("/f.txt", "GBK");
-    expect(r).toEqual({ content: "内容", encoding: "GBK" });
+    expect(r).toEqual({ content: "内容", encoding: "GBK", lineCount: 1 });
   });
 
   it("探测失败回落 UTF-8", async () => {

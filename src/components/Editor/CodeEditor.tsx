@@ -198,6 +198,7 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
   const lastCursorRef = useRef<{ line: number; column: number } | null>(null);
   // 内容防抖同步：pending 保存最近一次事务的全文，定时器 200ms 后写入 store
   const pendingContentRef = useRef<string | null>(null);
+  const pendingLineCountRef = useRef<number | null>(null);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tab = useTabStore((s) => s.tabs.find((t) => t.id === tabId));
   const updateContent = useTabStore((s) => s.updateContent);
@@ -222,8 +223,11 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
       }
       if (pendingContentRef.current !== null) {
         const content = pendingContentRef.current;
+        const lineCount = pendingLineCountRef.current;
         pendingContentRef.current = null;
-        updateContent(tabId, content);
+        pendingLineCountRef.current = null;
+        // 行数由 CodeMirror O(1) 直传：大文件（74MB+）每击键不再全文 split
+        updateContent(tabId, content, lineCount ?? undefined);
       }
     };
 
@@ -233,8 +237,10 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           // 全量内容同步改为 200ms 防抖；IME 组合期间只暂存不排程，
-          // 由 compositionend / blur / destroy 统一 flush
+          // 由 compositionend / blur / destroy 统一 flush。
+          // 行数随全文一起暂存（doc.lines O(1)），flush 时直传 store
           pendingContentRef.current = update.state.doc.toString();
+          pendingLineCountRef.current = update.state.doc.lines;
           if (!isComposingRef.current) {
             if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
             syncTimerRef.current = setTimeout(flushContentSync, 200);

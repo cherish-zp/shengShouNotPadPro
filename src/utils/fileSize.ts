@@ -1,8 +1,6 @@
-export const MAX_OPEN_FILE_SIZE_BYTES = 10 * 1024 * 1024;
-
-export function isFileSizeOverLimit(size: number): boolean {
-  return Number.isFinite(size) && size > MAX_OPEN_FILE_SIZE_BYTES;
-}
+// 文件大小工具：状态栏展示 + 大小查询。
+// v0.2.3 起不再限制文本文件打开大小（10MB 硬拦截移除，74MB+ 实测可用）：
+// 后端读取走 spawn_blocking 不卡主线程，正文超 1MB 不进 localStorage（见 tabStore）。
 
 export function formatFileSize(size: number | null | undefined): string | null {
   if (size === null || size === undefined || !Number.isFinite(size) || size < 0) {
@@ -22,10 +20,6 @@ export function formatFileSizeTooltip(size: number | null | undefined): string |
   }
 
   return `${size.toLocaleString("en-US")} 字节`;
-}
-
-export function fileSizeLimitMessage(size: number): string {
-  return `无法打开：文件为 ${formatFileSize(size)}（${size.toLocaleString("en-US")} 字节），超过 ${formatFileSize(MAX_OPEN_FILE_SIZE_BYTES)} 限制`;
 }
 
 // 约定：获取文件大小失败或环境不可用时返回 null；

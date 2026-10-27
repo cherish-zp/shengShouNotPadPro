@@ -1,12 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  MAX_OPEN_FILE_SIZE_BYTES,
   formatFileSize,
   formatFileSizeTooltip,
-  fileSizeLimitMessage,
   getFileSizeBytes,
-  isFileSizeOverLimit,
 } from "./fileSize";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -56,29 +53,6 @@ describe("fileSize", () => {
       expect(formatFileSizeTooltip(Number.POSITIVE_INFINITY)).toBeNull();
       expect(formatFileSizeTooltip(-1)).toBeNull();
     });
-  });
-
-  describe("isFileSizeOverLimit", () => {
-    it("allows finite sizes at or below the limit", () => {
-      expect(isFileSizeOverLimit(MAX_OPEN_FILE_SIZE_BYTES)).toBe(false);
-      expect(isFileSizeOverLimit(MAX_OPEN_FILE_SIZE_BYTES - 1)).toBe(false);
-    });
-
-    it("blocks only finite sizes above the limit", () => {
-      expect(isFileSizeOverLimit(MAX_OPEN_FILE_SIZE_BYTES + 1)).toBe(true);
-      expect(isFileSizeOverLimit(Number.NaN)).toBe(false);
-      expect(isFileSizeOverLimit(Number.POSITIVE_INFINITY)).toBe(false);
-    });
-  });
-
-  it("builds the file size limit message", () => {
-    expect(fileSizeLimitMessage(MAX_OPEN_FILE_SIZE_BYTES + 1)).toBe(
-      `无法打开：文件为 ${formatFileSize(MAX_OPEN_FILE_SIZE_BYTES + 1)}（${(MAX_OPEN_FILE_SIZE_BYTES + 1).toLocaleString("en-US")} 字节），超过 ${formatFileSize(MAX_OPEN_FILE_SIZE_BYTES)} 限制`,
-    );
-    // 边界值四舍五入后与限制值同显为 10.0 MB，需附带精确字节数避免歧义
-    expect(fileSizeLimitMessage(MAX_OPEN_FILE_SIZE_BYTES + 1)).toContain(
-      "10.0 MB（10,485,761 字节）",
-    );
   });
 
   describe("getFileSizeBytes", () => {

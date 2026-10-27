@@ -40,7 +40,7 @@ export function languageForPath(path: string): string {
 export async function loadFileContent(
   path: string,
   deps: OpenFileDeps
-): Promise<{ content: string; encoding: string }> {
+): Promise<{ content: string; encoding: string; lineCount: number }> {
   let encoding = DEFAULT_ENCODING;
   try {
     const detected = await deps.detectEncoding(path);
@@ -49,17 +49,25 @@ export async function loadFileContent(
     // 探测失败：回落 UTF-8
   }
   const result = await deps.readFile(path, encoding);
-  return { content: result.content, encoding: result.encoding || encoding };
+  return {
+    content: result.content,
+    encoding: result.encoding || encoding,
+    // 后端流式数好的行数直达前端，避免对大文件（74MB+）再做一次全文 split
+    lineCount: result.line_count,
+  };
 }
 
 /**
  * 打开文件为便签 tab（三条入口的公共尾部）：文件名 + 语言推断 + 编码检测读取 +
- * useTabStore.getState().addTab（新 tab 自动激活，kind 为默认的 "file"）。
+ * useTabStore.getState().addTab（新 tab 自动激活，kind 为默认的 "file"，行数由
+ * 后端 line_count 直传，打开 74MB 大文件不再全文 split）。
  * 读取失败时错误向上抛出，由调用方决定兜底（建空 tab / 仅记日志）。
  */
 export async function openPathAsTab(path: string, deps: OpenFileDeps): Promise<Tab> {
   const name = path.split(/[\\/]/).pop() || path;
   const language = languageForPath(path);
-  const { content, encoding } = await loadFileContent(path, deps);
-  return useTabStore.getState().addTab({ name, filePath: path, content, encoding, language });
+  const { content, encoding, lineCount } = await loadFileContent(path, deps);
+  return useTabStore
+    .getState()
+    .addTab({ name, filePath: path, content, encoding, language, lineCount });
 }

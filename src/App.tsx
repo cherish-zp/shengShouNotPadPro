@@ -11,7 +11,6 @@ import { useUpdateStore } from "@/store/updateStore";
 import { classifyFileExtension } from "@/utils/quarantine";
 import { languageForPath, openPathAsTab } from "@/utils/openFile";
 import { toast } from "@/utils/toast";
-import { fileSizeLimitMessage, getFileSizeBytes, isFileSizeOverLimit } from "@/utils/fileSize";
 
 export default function App() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -26,7 +25,11 @@ export default function App() {
     // 加载设置和便签数据
     loadSettings();
     hydrate(); // 恢复上次的便签
+    // 大文件支持：恢复被持久化省略正文的大文件标签（从磁盘回读，火忘式）
+    void useTabStore.getState().reloadOmittedTabs({ readFile });
     startAutoCheck(); // 更新检查的定时调度（8s 后首查 + 每 60 分钟，store 内部防重复）
+    // readFile 经 useCallback 稳定，仅首挂载执行一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 监听从 Finder / 右键打开方式 启动应用时传入的文件
@@ -47,12 +50,6 @@ export default function App() {
             const name = path.split(/[\\/]/).pop() || path;
             const safety = classifyFileExtension(name);
             try {
-              // 超过大小上限的文件直接拦截，避免整读进内存
-              const sizeBytes = await getFileSizeBytes(path);
-              if (sizeBytes !== null && isFileSizeOverLimit(sizeBytes)) {
-                toast(fileSizeLimitMessage(sizeBytes), { type: "error" });
-                continue;
-              }
               // 清除隔离属性（虽然应用启动时已清一次，但文件可能是新的）
               if (safety !== "caution") {
                 invoke("remove_quarantine", { path, recursive: false }).catch(() => {});

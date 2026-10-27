@@ -12,8 +12,6 @@ import { tabMoveBounds } from "@/utils/tabOrder";
 import { classifyFileExtension } from "@/utils/quarantine";
 import { openPathAsTab, languageForPath } from "@/utils/openFile";
 import { useTauri } from "@/hooks/useTauri";
-import { toast } from "@/utils/toast";
-import { fileSizeLimitMessage, getFileSizeBytes, isFileSizeOverLimit } from "@/utils/fileSize";
 import { scrollContainerStyle } from "./panelLayout";
 import type { TabColor, FileTreeNode } from "@/types";
 
@@ -489,12 +487,6 @@ function FileTreeSection() {
     if (!node.isDir) {
       try {
         const { invoke } = await import("@tauri-apps/api/core");
-        // 打开前检查文件大小，超限则提示并阻止读取内容
-        const sizeBytes = await getFileSizeBytes(node.path);
-        if (sizeBytes !== null && isFileSizeOverLimit(sizeBytes)) {
-          toast(fileSizeLimitMessage(sizeBytes), { type: "error" });
-          return;
-        }
         // 打开前先移除 macOS 隔离属性，避免下载的文件弹出安全警告
         const safety = classifyFileExtension(node.name);
         if (safety !== "caution") {

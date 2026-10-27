@@ -374,3 +374,81 @@ describe("现有 action 行为保持（经由 updateTab 的回归）", () => {
     expect(getTabLineCount(tabs[1].id)).toBe(2);
   });
 });
+
+// ---------------- 大文件支持：持久化护栏 + 行数直传 + 磁盘回读 ----------------
+describe("大文件支持", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  it("updateContent 接受显式行数（O(1) 路径，不再全文 split）", () => {
+    const t = useTabStore.getState().addTab({ name: "大文件" });
+    useTabStore.getState().updateContent(t.id, "内容", 987654);
+    expect(getTabLineCount(t.id)).toBe(987654);
+  });
+
+  it("addTab 接受显式行数（来自后端 line_count，避免打开 74MB 时全文 split）", () => {
+    const t = useTabStore.getState().addTab({ name: "大文件", content: "a\nb", lineCount: 987654 });
+    expect(getTabLineCount(t.id)).toBe(987654);
+  });
+
+  it("超过持久化上限的内容不写入 localStorage（改为 contentOmitted 标记），小内容不受影响", () => {
+    vi.stubGlobal("crypto", { randomUUID: () => "uuid-big" });
+    const big = "x".repeat(1024 * 1024 + 1); // 超过 1MB 持久化上限
+    useTabStore.getState().addTab({ name: "大", content: big, lineCount: 1 });
+    useTabStore.getState().addTab({ name: "小", content: "小内容" });
+    vi.advanceTimersByTime(300);
+
+    const raw = JSON.parse(localStorage.getItem("novaedit-tabs") as string);
+    const bigTab = raw.tabs.find((t: { id: string }) => t.id === "uuid-big");
+    const smallTab = raw.tabs.find((t: { name: string }) => t.name === "小");
+    expect(bigTab.content).toBe("");
+    expect(bigTab.contentOmitted).toBe(true);
+    expect(smallTab.content).toBe("小内容");
+    // 内存中的完整内容不受影响（只是不进 localStorage）
+    expect(useTabStore.getState().tabs.find((t) => t.id === "uuid-big")?.content).toBe(big);
+  });
+
+  it("hydrate 后 reloadOmittedTabs 从磁盘回读被省略的文件内容", async () => {
+    const rawTab = {
+      id: "big1", name: "big.txt", kind: "file", content: "", contentOmitted: true,
+      filePath: "/x/big.txt", language: "plaintext", encoding: "UTF-8",
+      lineEnding: "LF", indentSize: 2, indentType: "spaces", dirty: false, createdAt: 1,
+    };
+    localStorage.setItem(
+      "novaedit-tabs",
+      JSON.stringify({ tabs: [rawTab], activeTabId: "big1", nextTabNum: 2 })
+    );
+    useTabStore.getState().hydrate();
+
+    const readFile = vi.fn().mockResolvedValue({ content: "真实内容\n第二行", encoding: "UTF-8", line_count: 2 });
+    await useTabStore.getState().reloadOmittedTabs({ readFile });
+
+    const tab = useTabStore.getState().tabs[0];
+    expect(tab.content).toBe("真实内容\n第二行");
+    expect(tab.contentOmitted).toBe(false);
+    expect(tab.dirty).toBe(false);
+    expect(getTabLineCount("big1")).toBe(2);
+  });
+
+  it("回读失败时保留 contentOmitted 标记并置脏（下次再试）", async () => {
+    const rawTab = {
+      id: "big2", name: "big.txt", kind: "file", content: "", contentOmitted: true,
+      filePath: "/x/big.txt", language: "plaintext", encoding: "UTF-8",
+      lineEnding: "LF", indentSize: 2, indentType: "spaces", dirty: false, createdAt: 1,
+    };
+    localStorage.setItem(
+      "novaedit-tabs",
+      JSON.stringify({ tabs: [rawTab], activeTabId: "big2", nextTabNum: 2 })
+    );
+    useTabStore.getState().hydrate();
+
+    const readFile = vi.fn().mockRejectedValue(new Error("disk error"));
+    await useTabStore.getState().reloadOmittedTabs({ readFile });
+
+    const tab = useTabStore.getState().tabs[0];
+    expect(tab.content).toBe("");
+    expect(tab.contentOmitted).toBe(true);
+    expect(tab.dirty).toBe(true);
+  });
+});
