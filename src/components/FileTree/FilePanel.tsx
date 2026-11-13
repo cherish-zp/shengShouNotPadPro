@@ -341,7 +341,7 @@ const TreeNodeRow = memo(function TreeNodeRow({
         style={{
           display: "flex", alignItems: "center", gap: 4,
           padding: "3px 8px 3px " + (8 + depth * 16) + "px",
-          fontSize: 13, cursor: "pointer", color: "var(--text-secondary)",
+          fontSize: 13, cursor: "pointer", color: "var(--text-primary)",
           borderRadius: 4,
           outline: dragOverPath === node.path && node.isDir ? "1px dashed var(--accent)" : "none",
           outlineOffset: -1,

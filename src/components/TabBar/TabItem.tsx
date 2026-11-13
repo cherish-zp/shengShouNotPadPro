@@ -144,7 +144,9 @@ function TabItem({
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
-                color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
+                // 名称必须清晰可读：始终用主文字色，激活项加粗区分
+                color: "var(--text-primary)",
+                fontWeight: isActive ? 600 : 400,
                 lineHeight: 1.4,
               }}
               title={tab.name}
@@ -159,7 +161,6 @@ function TabItem({
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
                   color: "var(--text-secondary)",
-                  opacity: 0.6,
                   lineHeight: 1.2,
                 }}
                 title={tab.filePath}
