@@ -25,6 +25,7 @@ import { useEditorStore } from "@/store/editorStore";
 import { middleButtonRectSelection } from "@/utils/cm/rectSelection";
 import { searchHighlightExtension } from "@/utils/cm/searchHighlight";
 import { smartTab } from "@/utils/cm/tabIndent";
+import { shouldApplyExternalContent } from "@/utils/cm/externalContentSync";
 import { inlineImages } from "@/utils/cm/imageWidgets";
 import { insertImageBytes } from "@/utils/imagePasteFlow";
 import { baseDirOfFilePath, isPasteSupported } from "@/utils/imagePaste";
@@ -200,6 +201,9 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
   const pendingContentRef = useRef<string | null>(null);
   const pendingLineCountRef = useRef<number | null>(null);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 编辑器最近一次写进 store 的内容引用：外部同步时用 === 引用短路，
+  // 区分「自己防抖回写」与「外部变更」（回读/编码切换），击键热路径 O(1)
+  const lastSyncedContentRef = useRef<string | null>(null);
   const tab = useTabStore((s) => s.tabs.find((t) => t.id === tabId));
   const updateContent = useTabStore((s) => s.updateContent);
   const { fontSize, fontFamily, lineHeight, wordWrap, showLineNumbers } = useSettingsStore();
@@ -228,6 +232,7 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
         pendingLineCountRef.current = null;
         // 行数由 CodeMirror O(1) 直传：大文件（74MB+）每击键不再全文 split
         updateContent(tabId, content, lineCount ?? undefined);
+        lastSyncedContentRef.current = content;
       }
     };
 
@@ -326,6 +331,9 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
       extensions,
     });
 
+    // 文档以当前 store 内容为基线：此后 store.content 只有外部变更才需要回灌
+    lastSyncedContentRef.current = tab.content;
+
     const view = new EditorView({
       state,
       parent: containerRef.current,
@@ -352,13 +360,22 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
     });
   }, [wordWrap]);
 
-  // 切换标签时更新内容
+  // 切换标签时更新内容；store.content 的外部变更（大文件启动回读、编码切换重读）
+  // 也要写进文档，否则恢复的 tab 编辑器永远空白。用引用比较区分「自己防抖回写」
+  // 与「外部变更」：回写内容是同一引用直接短路，不做 O(N) toString
   useEffect(() => {
     if (!viewRef.current || !tab) return;
     // IME 组合期间不外部回写，避免破坏正在进行的拼写会话
     if (isComposingRef.current) return;
+    // O(1) 引用短路：store 内容就是编辑器自己回写的 → 什么也不用做
+    if (
+      lastSyncedContentRef.current !== null &&
+      tab.content === lastSyncedContentRef.current
+    ) {
+      return;
+    }
     const currentContent = viewRef.current.state.doc.toString();
-    if (currentContent !== tab.content) {
+    if (shouldApplyExternalContent(currentContent, tab.content, lastSyncedContentRef.current)) {
       viewRef.current.dispatch({
         changes: {
           from: 0,
@@ -366,9 +383,10 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
           insert: tab.content,
         },
       });
+      lastSyncedContentRef.current = tab.content;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId]);
+  }, [tabId, tab?.content]);
 
   if (!tab) return null;
 

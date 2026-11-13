@@ -193,9 +193,14 @@ export const useTabStore = create<TabStore>((set, get) => {
       for (const tab of omitted) {
         try {
           const result = await readFile(tab.filePath as string, tab.encoding || "UTF-8");
-          get().updateContent(tab.id, result.content, result.line_count);
-          get().markClean(tab.id);
-          get().updateTab(tab.id, { contentOmitted: false });
+          // 一次 patch 同时落内容/清脏/清省略标记（行数用后端 O(1) 结果），
+          // 避免过去 updateContent→markClean→updateTab 三次通知与三次持久化调度
+          lineCounts.set(tab.id, result.line_count);
+          get().updateTab(tab.id, {
+            content: result.content,
+            dirty: false,
+            contentOmitted: false,
+          });
         } catch (err) {
           console.error("回读大文件失败，保持置脏以便重试:", tab.filePath, err);
           get().markDirty(tab.id);
