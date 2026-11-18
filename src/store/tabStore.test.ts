@@ -347,6 +347,24 @@ describe("现有 action 行为保持（经由 updateTab 的回归）", () => {
     expect(useTabStore.getState().tabs[0].color).toBeUndefined();
   });
 
+  it("setTabLineEnding 切换时转换正文并置脏（CRLF ⇄ LF）", () => {
+    const t = useTabStore.getState().addTab({ content: "a\nb\n" });
+    const s = useTabStore.getState();
+    s.setTabLineEnding(t.id, "CRLF");
+    let tab = useTabStore.getState().tabs[0];
+    expect(tab.content).toBe("a\r\nb\r\n");
+    expect(tab.dirty).toBe(true);
+    // 切回 LF：内容还原，dirty 保持（仍未保存）
+    s.setTabLineEnding(t.id, "LF");
+    tab = useTabStore.getState().tabs[0];
+    expect(tab.content).toBe("a\nb\n");
+    expect(tab.dirty).toBe(true);
+    // 同值重复设置：no-op 不置脏
+    s.markClean(t.id);
+    s.setTabLineEnding(t.id, "LF");
+    expect(useTabStore.getState().tabs[0].dirty).toBe(false);
+  });
+
   it("setFilePath 更新路径并从路径取文件名", () => {
     const t = useTabStore.getState().addTab({ name: "新建1" });
     useTabStore.getState().setFilePath(t.id, "/Users/me/docs/笔记.txt");

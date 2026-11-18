@@ -10,6 +10,27 @@ pub struct FileContent {
     pub content: String,
     pub encoding: String,
     pub line_count: usize,
+    /// 首个换行序列决定：\r\n → CRLF，否则 LF（前端保存时按它写回）
+    pub line_ending: String,
+}
+
+/// 字节级检测换行符：扫描到首个换行序列即返回（与前端语义一致）。
+/// 孤立 \r（旧 Mac 风格）不算 CRLF，继续向后找。
+fn detect_line_ending(bytes: &[u8]) -> &'static str {
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\n' => return "LF",
+            b'\r' => {
+                if bytes.get(i + 1) == Some(&b'\n') {
+                    return "CRLF";
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    "LF"
 }
 
 #[derive(Serialize, Deserialize)]
@@ -139,12 +160,15 @@ fn count_lines(path: &Path) -> u64 {
 pub async fn read_file(path: String, encoding: String) -> Result<FileContent, String> {
     tauri::async_runtime::spawn_blocking(move || -> Result<FileContent, String> {
         let bytes = fs::read(&path).map_err(|e| format!("Failed to read file: {}", e))?;
+        // 换行符在原始字节上检测：转码后的字符串已无法区分 \r\n 与孤立 \r
+        let line_ending = detect_line_ending(&bytes).to_string();
         let content = decode_content(&bytes, &encoding)?;
         let line_count = content.lines().count().max(1);
         Ok(FileContent {
             content,
             encoding,
             line_count,
+            line_ending,
         })
     })
     .await
@@ -561,6 +585,58 @@ mod tests {
         let file = dir.join("empty.txt");
         fs::write(&file, b"").expect("write temp file");
         assert_eq!(count_lines(&file), 0);
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    /// 换行符检测：CRLF 文件命中 CRLF。
+    #[test]
+    fn test_detect_line_ending_crlf() {
+        assert_eq!(detect_line_ending(b"a\r\nb"), "CRLF");
+        // CRLF 出现在后面也命中（首个换行序列决定）
+        assert_eq!(detect_line_ending(b"ab\r\ncd\nef"), "CRLF");
+    }
+
+    /// 换行符检测：LF 与无换行文件都是 LF。
+    #[test]
+    fn test_detect_line_ending_lf() {
+        assert_eq!(detect_line_ending(b"a\nb"), "LF");
+        assert_eq!(detect_line_ending(b"no newline"), "LF");
+        assert_eq!(detect_line_ending(b""), "LF");
+    }
+
+    /// 换行符检测：孤立 \r（旧 Mac 风格）不算 CRLF，继续向后扫描。
+    #[test]
+    fn test_detect_line_ending_lone_cr_not_crlf() {
+        // 只有孤立 \r：回落 LF
+        assert_eq!(detect_line_ending(b"a\rb\rc"), "LF");
+        // 孤立 \r 在前，真正的 \n 在后：首个换行序列判定为 LF
+        assert_eq!(detect_line_ending(b"a\rb\nc\r\nd"), "LF");
+        // 孤立 \r 在前，首个完整换行序列是 \r\n：判定 CRLF
+        assert_eq!(detect_line_ending(b"a\rb\r\nc"), "CRLF");
+    }
+
+    /// read_file 集成：返回的 line_ending 与文件实际换行符一致。
+    #[test]
+    fn test_read_file_returns_line_ending() {
+        let dir = temp_dir("le-read");
+        fs::create_dir_all(&dir).expect("create temp dir");
+        let crlf = dir.join("crlf.txt");
+        fs::write(&crlf, b"a\r\nb\r\n").expect("write temp file");
+        let result = tauri::async_runtime::block_on(read_file(
+            crlf.to_string_lossy().to_string(),
+            "UTF-8".into(),
+        ))
+        .expect("read_file");
+        assert_eq!(result.line_ending, "CRLF");
+
+        let lf = dir.join("lf.txt");
+        fs::write(&lf, b"a\nb\n").expect("write temp file");
+        let result = tauri::async_runtime::block_on(read_file(
+            lf.to_string_lossy().to_string(),
+            "UTF-8".into(),
+        ))
+        .expect("read_file");
+        assert_eq!(result.line_ending, "LF");
         fs::remove_dir_all(&dir).ok();
     }
 }

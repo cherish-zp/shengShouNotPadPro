@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Plus, Eye, EyeOff, Save, Settings2, WrapText, Minus, Square, X } from "lucide-react";
+import { Plus, Eye, EyeOff, Save, Settings2, WrapText, Pilcrow, Minus, Square, X } from "lucide-react";
 import Dropdown from "@/components/Common/Dropdown";
 import UpdateButton from "@/components/Update/UpdateButton";
 import { useTabStore } from "@/store/tabStore";
@@ -141,11 +141,12 @@ function TabSettingsSection() {
         <Dropdown
           value={tab.lineEnding}
           options={[
-            { value: "LF", label: "LF (Mac)" },
-            { value: "CRLF", label: "CRLF (Win)" },
+            { value: "LF", label: "LF — Mac / Linux" },
+            { value: "CRLF", label: "CRLF — Windows" },
           ]}
           onChange={(v) => setTabLineEnding(tabId, v as "LF" | "CRLF")}
-          width={130}
+          title={"LF = \\n（Mac/Linux 换行）\nCRLF = \\r\\n（Windows 换行）\n切换时正文同步转换，保存按此写盘"}
+          width={140}
         />
       </div>
       <div style={rowStyle}>
@@ -179,6 +180,7 @@ export default function TitleBar() {
   const toggleMarkdownPreview = useEditorStore((s) => s.toggleMarkdownPreview);
   const fontSize = useSettingsStore((s) => s.fontSize);
   const wordWrap = useSettingsStore((s) => s.wordWrap);
+  const showLineEndings = useSettingsStore((s) => s.showLineEndings);
   const updateSetting = useSettingsStore((s) => s.updateSetting);
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -333,6 +335,24 @@ export default function TitleBar() {
                   }}
                 >
                   <WrapText size={14} />
+                </button>
+              </div>
+              <div style={rowStyle}>
+                <span style={{ flex: 1, fontSize: 12, color: "var(--text-secondary)" }}>显示换行符</span>
+                <button
+                  onClick={() => updateSetting("showLineEndings", !showLineEndings)}
+                  title={showLineEndings
+                    ? "已显示换行符：行尾 CRLF = Windows 换行，LF = Mac/Linux 换行（点击关闭）"
+                    : "已隐藏换行符（点击开启后每行行尾显示 CRLF / LF 字样）"}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    width: 28, height: 24, borderRadius: 4,
+                    color: showLineEndings ? "var(--accent)" : "var(--text-secondary)",
+                    background: showLineEndings ? "var(--bg-hover)" : "transparent",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Pilcrow size={14} />
                 </button>
               </div>
             </div>

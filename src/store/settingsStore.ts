@@ -3,6 +3,10 @@ import type { AppSettings } from "@/types";
 import { darkenHex, hexToRgb, normalizeHex } from "@/utils/color";
 
 const SETTINGS_KEY = "novaedit-settings";
+// 设置结构版本：loadSettings 依赖它区分「旧系统默认值」与「用户主动选择」。
+// 新增设置项且默认值与旧版默认不同时，必须 +1 并在 loadSettings 里做迁移，
+// 否则旧数据里的旧默认会覆盖新默认（showLineEndings 就吃过这个亏）。
+const SETTINGS_VERSION = 1;
 
 interface SettingsStore extends AppSettings {
   updateSetting: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
@@ -25,6 +29,7 @@ const DEFAULTS: AppSettings = {
   autoSave: true,
   autoSaveInterval: 30000,
   showLineNumbers: true,
+  showLineEndings: true,
   accentColor: "#2563EB",
   windowOpacity: 1,
 };
@@ -98,6 +103,14 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         // 旧版本遗留键清理：sidebarWidth 已是 MainLayout 本地 state，不再属于设置项，
         // 防止旧 localStorage 残留的键经 {...DEFAULTS, ...parsed} 混入未类型化 state
         delete (parsed as Record<string, unknown>).sidebarWidth;
+        // 结构版本迁移：无版本号的旧数据里 showLineEndings 是当时的系统默认（false），
+        // 不是用户选择——丢弃之让新默认（true）生效，并补上版本号；
+        // 带版本号的数据表示用户已做过选择（或已迁移过），原样保留
+        const raw = parsed as Record<string, unknown>;
+        if (raw.settingsVersion === undefined) {
+          delete raw.showLineEndings;
+          raw.settingsVersion = SETTINGS_VERSION;
+        }
         set({ ...DEFAULTS, ...parsed });
         applyTheme(parsed.theme || DEFAULTS.theme);
         applySkin(parsed.skin || DEFAULTS.skin, parsed.accentColor || DEFAULTS.accentColor);
@@ -115,7 +128,7 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
   saveSettings: () => {
     try {
       const state = get();
-      const settings: AppSettings = {
+      const settings: AppSettings & { settingsVersion: number } = {
         theme: state.theme,
         skin: state.skin,
         backgroundImage: state.backgroundImage,
@@ -129,8 +142,10 @@ export const useSettingsStore = create<SettingsStore>((set, get) => ({
         autoSave: state.autoSave,
         autoSaveInterval: state.autoSaveInterval,
         showLineNumbers: state.showLineNumbers,
+        showLineEndings: state.showLineEndings,
         accentColor: state.accentColor,
         windowOpacity: state.windowOpacity,
+        settingsVersion: SETTINGS_VERSION,
       };
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
     } catch {

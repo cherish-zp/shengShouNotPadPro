@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Tab, TabColor } from "@/types";
 import { moveTab, moveTabByOffset, normalizeTabOrder, pinTab, unpinTab } from "@/utils/tabOrder";
+import { applyLineEnding } from "@/utils/lineEndings";
 import { useEditorStore } from "./editorStore";
 
 const STORAGE_KEY = "novaedit-tabs";
@@ -120,7 +121,7 @@ interface TabStore {
     readFile: (
       path: string,
       encoding: string
-    ) => Promise<{ content: string; encoding: string; line_count: number }>;
+    ) => Promise<{ content: string; encoding: string; line_count: number; line_ending: string }>;
   }) => Promise<void>;
   closeTab: (id: string) => void;
   /** 单 tab 不可变更新：内容无变化时为 no-op（不通知、不持久化） */
@@ -194,12 +195,13 @@ export const useTabStore = create<TabStore>((set, get) => {
         try {
           const result = await readFile(tab.filePath as string, tab.encoding || "UTF-8");
           // 一次 patch 同时落内容/清脏/清省略标记（行数用后端 O(1) 结果），
-          // 避免过去 updateContent→markClean→updateTab 三次通知与三次持久化调度
+          // 换行符以磁盘为准（旧快照可能没有或已过期）
           lineCounts.set(tab.id, result.line_count);
           get().updateTab(tab.id, {
             content: result.content,
             dirty: false,
             contentOmitted: false,
+            lineEnding: result.line_ending === "CRLF" ? "CRLF" : "LF",
           });
         } catch (err) {
           console.error("回读大文件失败，保持置脏以便重试:", tab.filePath, err);
@@ -317,6 +319,11 @@ export const useTabStore = create<TabStore>((set, get) => {
     },
 
     setTabLineEnding: (id: string, lineEnding: "LF" | "CRLF") => {
+      const tab = get().tabs.find((t) => t.id === id);
+      if (!tab || tab.lineEnding === lineEnding) return;
+      // 换行符是文件属性：切换时同步转换正文（编辑器经外部内容同步回灌）并置脏，
+      // 保存时按新换行符写盘；否则状态栏显示 CRLF 而磁盘仍是 LF
+      get().updateContent(id, applyLineEnding(tab.content, lineEnding));
       get().updateTab(id, { lineEnding });
     },
 

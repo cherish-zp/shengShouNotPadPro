@@ -69,7 +69,16 @@ export default function StatusBar() {
         {tab?.filePath && sizeLabel && <span style={{ opacity: 0.2 }}>·</span>}
         {tab && <span style={{ opacity: 0.6 }}>{getEncodingLabel(tab.encoding)}</span>}
         {tab && <span style={{ opacity: 0.2 }}>·</span>}
-        {tab && <span style={{ opacity: 0.6 }}>{tab.lineEnding}</span>}
+        {tab && (
+          <span
+            style={{ opacity: 0.8 }}
+            title={tab.lineEnding === "CRLF"
+              ? "换行符：CRLF（\\r\\n，Windows 风格换行）"
+              : "换行符：LF（\\n，Mac/Linux 风格换行）\n可在顶栏 ⚙ 面板切换或开启「显示换行符」在行尾看到标记"}
+          >
+            {tab.lineEnding}
+          </span>
+        )}
         {tab && <span style={{ opacity: 0.2 }}>·</span>}
         {tab && <span style={{ opacity: 0.6 }}>{tab.indentType === "tab" ? "Tab" : `${tab.indentSize} 空格`}</span>}
       </div>

@@ -12,9 +12,11 @@ interface DropdownProps {
   onChange: (value: string) => void;
   label?: string;
   width?: number;
+  /** 悬停说明（如换行符 LF/CRLF 的含义） */
+  title?: string;
 }
 
-export default function Dropdown({ value, options, onChange, label, width = 120 }: DropdownProps) {
+export default function Dropdown({ value, options, onChange, label, width = 120, title }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -35,6 +37,7 @@ export default function Dropdown({ value, options, onChange, label, width = 120 
       )}
       <button
         onClick={() => setOpen(!open)}
+        title={title}
         style={{
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4,
           width: "100%", padding: "4px 8px", fontSize: 12,
@@ -51,7 +54,8 @@ export default function Dropdown({ value, options, onChange, label, width = 120 
         <div
           style={{
             position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4,
-            background: "var(--bg-surface)", border: "1px solid var(--border)",
+            // 不透明背景：--bg-surface 半透明，设了背景图片后选项文字会被透出的图片干扰
+            background: "var(--bg-primary)", border: "1px solid var(--border)",
             borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
             maxHeight: 240, overflowY: "auto", zIndex: 500,
             animation: "slideDown 0.1s ease",

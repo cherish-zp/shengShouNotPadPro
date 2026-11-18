@@ -26,6 +26,7 @@ import { middleButtonRectSelection } from "@/utils/cm/rectSelection";
 import { searchHighlightExtension } from "@/utils/cm/searchHighlight";
 import { smartTab } from "@/utils/cm/tabIndent";
 import { shouldApplyExternalContent } from "@/utils/cm/externalContentSync";
+import { lineEndingMarks } from "@/utils/cm/lineEndingMarks";
 import { inlineImages } from "@/utils/cm/imageWidgets";
 import { insertImageBytes } from "@/utils/imagePasteFlow";
 import { baseDirOfFilePath, isPasteSupported } from "@/utils/imagePaste";
@@ -84,6 +85,7 @@ const novaHighlight = HighlightStyle.define([
 const themeCompartment = new Compartment();
 const languageCompartment = new Compartment();
 const wordWrapCompartment = new Compartment();
+const lineEndingCompartment = new Compartment();
 
 function makeTheme() {
   // 使用 inherit，让字体大小等从父容器 CSS 继承
@@ -206,7 +208,7 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
   const lastSyncedContentRef = useRef<string | null>(null);
   const tab = useTabStore((s) => s.tabs.find((t) => t.id === tabId));
   const updateContent = useTabStore((s) => s.updateContent);
-  const { fontSize, fontFamily, lineHeight, wordWrap, showLineNumbers } = useSettingsStore();
+  const { fontSize, fontFamily, lineHeight, wordWrap, showLineNumbers, showLineEndings } = useSettingsStore();
   const updateCursor = useEditorStore((s) => s.updateCursor);
   const setEditorView = useEditorStore((s) => s.setEditorView);
 
@@ -315,6 +317,14 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
       }),
       languageCompartment.of(getLanguageExtension(tab.language) || []),
       wordWrapCompartment.of(wordWrap ? EditorView.lineWrapping : []),
+      lineEndingCompartment.of(
+        showLineEndings
+          ? lineEndingMarks(() => {
+              const t = useTabStore.getState().tabs.find((x) => x.id === tabId);
+              return t?.lineEnding ?? "LF";
+            })
+          : []
+      ),
       // Markdown/纯文本便签：把 ![](...) 渲染成内联图片
       ...(isPasteSupported(tab.language)
         ? [
@@ -350,7 +360,7 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
       setEditorView(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId, tab?.language, showLineNumbers]);
+  }, [tabId, tab?.language, showLineNumbers, showLineEndings, tab?.lineEnding]);
 
   // 自动换行变化时
   useEffect(() => {
@@ -359,6 +369,21 @@ export default function CodeEditor({ tabId }: CodeEditorProps) {
       effects: wordWrapCompartment.reconfigure(wordWrap ? EditorView.lineWrapping : []),
     });
   }, [wordWrap]);
+
+  // 显示换行符标记开关变化时
+  useEffect(() => {
+    if (!viewRef.current) return;
+    viewRef.current.dispatch({
+      effects: lineEndingCompartment.reconfigure(
+        showLineEndings
+          ? lineEndingMarks(() => {
+              const t = useTabStore.getState().tabs.find((x) => x.id === tabId);
+              return t?.lineEnding ?? "LF";
+            })
+          : []
+      ),
+    });
+  }, [showLineEndings]);
 
   // 切换标签时更新内容；store.content 的外部变更（大文件启动回读、编码切换重读）
   // 也要写进文档，否则恢复的 tab 编辑器永远空白。用引用比较区分「自己防抖回写」

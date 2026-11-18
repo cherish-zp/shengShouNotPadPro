@@ -752,3 +752,28 @@ html.has-bg-image #root {
   --hl-search-match: rgba(250, 179, 135, 0.35);
   --hl-search-match-selected: rgba(250, 179, 135, 0.55);
 }
+
+/* 「显示换行符」行尾标记（CodeEditor 的 lineEndingMarks 扩展）：
+   与主流编辑器的「显示空白字符」一致——行尾显示 CRLF / LF 字样块。
+   浅色下黑底白字，暗色下自动反转为亮底暗字（跟随 text-primary/bg-primary）；
+   CRLF 用警示橙底更醒目，一眼认出 Windows 换行 */
+.cm-le-lf,
+.cm-le-crlf {
+  margin-left: 6px;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 0.72em;
+  font-family: ui-monospace, Menlo, monospace;
+  line-height: 1.5;
+  user-select: none;
+  vertical-align: baseline;
+}
+.cm-le-lf {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+}
+.cm-le-crlf {
+  background: var(--warning);
+  color: #fff;
+  font-weight: 600;
+}

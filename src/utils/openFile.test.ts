@@ -6,7 +6,7 @@ import { useTabStore } from "@/store/tabStore";
 function makeDeps(overrides: Partial<OpenFileDeps> = {}): OpenFileDeps {
   return {
     detectEncoding: vi.fn(async () => "UTF-8"),
-    readFile: vi.fn(async () => ({ content: "hello", encoding: "UTF-8", line_count: 1 })),
+    readFile: vi.fn(async () => ({ content: "hello", encoding: "UTF-8", line_count: 1, line_ending: "LF" })),
     ...overrides,
   };
 }
@@ -37,12 +37,12 @@ describe("loadFileContent", () => {
   it("以探测到的编码读取并返回内容与编码", async () => {
     const deps = makeDeps({
       detectEncoding: vi.fn(async () => "GBK"),
-      readFile: vi.fn(async () => ({ content: "内容", encoding: "GBK", line_count: 1 })),
+      readFile: vi.fn(async () => ({ content: "内容", encoding: "GBK", line_count: 1, line_ending: "CRLF" })),
     });
     const r = await loadFileContent("/f.txt", deps);
     expect(deps.detectEncoding).toHaveBeenCalledWith("/f.txt");
     expect(deps.readFile).toHaveBeenCalledWith("/f.txt", "GBK");
-    expect(r).toEqual({ content: "内容", encoding: "GBK", lineCount: 1 });
+    expect(r).toEqual({ content: "内容", encoding: "GBK", lineCount: 1, lineEnding: "CRLF" });
   });
 
   it("探测失败回落 UTF-8", async () => {
@@ -68,7 +68,7 @@ describe("loadFileContent", () => {
   it("readFile 返回的编码与探测不同时以 readFile 为准（后端转码后判定）", async () => {
     const deps = makeDeps({
       detectEncoding: vi.fn(async () => "GBK"),
-      readFile: vi.fn(async () => ({ content: "abc", encoding: "GB18030", line_count: 1 })),
+      readFile: vi.fn(async () => ({ content: "abc", encoding: "GB18030", line_count: 1, line_ending: "LF" })),
     });
     const r = await loadFileContent("/f.txt", deps);
     expect(r.encoding).toBe("GB18030");
@@ -77,7 +77,7 @@ describe("loadFileContent", () => {
   it("readFile 返回空编码时回落探测编码", async () => {
     const deps = makeDeps({
       detectEncoding: vi.fn(async () => "GBK"),
-      readFile: vi.fn(async () => ({ content: "abc", encoding: "", line_count: 1 })),
+      readFile: vi.fn(async () => ({ content: "abc", encoding: "", line_count: 1, line_ending: "LF" })),
     });
     const r = await loadFileContent("/f.txt", deps);
     expect(r.encoding).toBe("GBK");
@@ -97,7 +97,7 @@ describe("openPathAsTab", () => {
   it("读取成功后以公共字段新增文件 tab 并返回", async () => {
     const deps = makeDeps({
       detectEncoding: vi.fn(async () => "GBK"),
-      readFile: vi.fn(async () => ({ content: "print(1)", encoding: "GBK", line_count: 1 })),
+      readFile: vi.fn(async () => ({ content: "print(1)", encoding: "GBK", line_count: 1, line_ending: "LF" })),
     });
     const before = useTabStore.getState().tabs.length;
     const tab = await openPathAsTab("/tmp/hello.py", deps);

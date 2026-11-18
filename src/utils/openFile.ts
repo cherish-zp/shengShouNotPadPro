@@ -15,7 +15,7 @@ export interface OpenFileDeps {
   readFile: (
     path: string,
     encoding: string
-  ) => Promise<{ content: string; encoding: string; line_count: number }>;
+  ) => Promise<{ content: string; encoding: string; line_count: number; line_ending: string }>;
 }
 
 /** 编码探测不可用时的兜底编码 */
@@ -40,7 +40,7 @@ export function languageForPath(path: string): string {
 export async function loadFileContent(
   path: string,
   deps: OpenFileDeps
-): Promise<{ content: string; encoding: string; lineCount: number }> {
+): Promise<{ content: string; encoding: string; lineCount: number; lineEnding: "LF" | "CRLF" }> {
   let encoding = DEFAULT_ENCODING;
   try {
     const detected = await deps.detectEncoding(path);
@@ -54,20 +54,23 @@ export async function loadFileContent(
     encoding: result.encoding || encoding,
     // 后端流式数好的行数直达前端，避免对大文件（74MB+）再做一次全文 split
     lineCount: result.line_count,
+    // 后端字节级检测的换行符（首个换行序列决定），保存时按它写回
+    lineEnding: result.line_ending === "CRLF" ? "CRLF" : "LF",
   };
 }
 
 /**
  * 打开文件为便签 tab（三条入口的公共尾部）：文件名 + 语言推断 + 编码检测读取 +
  * useTabStore.getState().addTab（新 tab 自动激活，kind 为默认的 "file"，行数由
- * 后端 line_count 直传，打开 74MB 大文件不再全文 split）。
+ * 后端 line_count 直传，打开 74MB 大文件不再全文 split；换行符由后端字节级
+ * 检测直达，CRLF 文件状态栏正确显示且保存不丢 \r\n）。
  * 读取失败时错误向上抛出，由调用方决定兜底（建空 tab / 仅记日志）。
  */
 export async function openPathAsTab(path: string, deps: OpenFileDeps): Promise<Tab> {
   const name = path.split(/[\\/]/).pop() || path;
   const language = languageForPath(path);
-  const { content, encoding, lineCount } = await loadFileContent(path, deps);
+  const { content, encoding, lineCount, lineEnding } = await loadFileContent(path, deps);
   return useTabStore
     .getState()
-    .addTab({ name, filePath: path, content, encoding, language, lineCount });
+    .addTab({ name, filePath: path, content, encoding, language, lineCount, lineEnding });
 }

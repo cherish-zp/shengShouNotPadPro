@@ -88,7 +88,7 @@ function getMockData<T>(cmd: string, args?: Record<string, unknown>): T {
 
 export function useTauri() {
   const readFile = useCallback(async (path: string, encoding: string = "UTF-8") => {
-    return invoke<{ content: string; encoding: string; line_count: number }>(
+    return invoke<{ content: string; encoding: string; line_count: number; line_ending: string }>(
       "read_file",
       { path, encoding }
     );

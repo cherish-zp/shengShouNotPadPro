@@ -17,13 +17,13 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
-        .setup(|app| {
+        .setup(|_app| {
             // Windows：去掉系统标题栏，由前端自绘顶栏（含最小化/最大化/关闭）；
             // macOS 走 tauri.conf.json 的 titleBarStyle=Overlay（保留红绿灯）
             #[cfg(target_os = "windows")]
             {
                 use tauri::Manager;
-                if let Some(win) = app.get_webview_window("main") {
+                if let Some(win) = _app.get_webview_window("main") {
                     let _ = win.set_decorations(false);
                 }
             }

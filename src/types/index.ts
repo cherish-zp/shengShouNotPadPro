@@ -104,6 +104,8 @@ export interface AppSettings {
   autoSave: boolean;
   autoSaveInterval: number;
   showLineNumbers: boolean;
+  /** 编辑器行尾显示换行符字样（CRLF / LF），默认开启 */
+  showLineEndings: boolean;
   accentColor: string;
   windowOpacity: number;
 }

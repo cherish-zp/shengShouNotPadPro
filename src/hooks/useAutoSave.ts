@@ -4,15 +4,17 @@ import type { Tab } from "@/types";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useTauri } from "./useTauri";
 import { extractStagingImageMoves, rewriteStagingLinks } from "@/utils/imagePaste";
+import { applyLineEnding } from "@/utils/lineEndings";
 
 /**
  * 保存单个便签：
  * 1. 若正文引用了暂存目录的图片（草稿贴图），先把图片迁移到 <文档目录>/assets/ 并重写链接；
  *    迁移失败不阻塞正文保存（保留暂存绝对路径，预览仍可显示）。
- * 2. 写入正文。
+ * 2. 按 tab.lineEnding 统一换行符后写入正文（CodeMirror 的 toString 恒用 \n，
+ *    不转换会把 CRLF 文件静默存成 LF）。
  * imageBridge 走动态 import：拆出主包 chunk，且只在真正保存时加载。
  */
-async function persistTab(
+export async function persistTab(
   tab: Tab,
   writeFile: (path: string, content: string, encoding: string) => Promise<void>
 ): Promise<void> {
@@ -44,7 +46,7 @@ async function persistTab(
     // 暂存目录不可用（如非 Tauri 环境）时跳过迁移，正文照常保存
     console.warn("跳过图片迁移:", err);
   }
-  await writeFile(tab.filePath, content, tab.encoding);
+  await writeFile(tab.filePath, applyLineEnding(content, tab.lineEnding), tab.encoding);
 }
 
 export function useAutoSave() {

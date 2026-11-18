@@ -75,8 +75,7 @@ describe("settingsStore 持久化防抖", () => {
 });
 
 describe("loadSettings 旧版本遗留键清理", () => {
-  it("忽略旧 localStorage 残留的 sidebarWidth 键，不将其混入 state", () => {
-    // loadSettings 内部会调用 apply* 系列写 documentElement/body，需按 resetDefaults 用例的方式 stub document
+  const stubDoc = () =>
     vi.stubGlobal("document", {
       documentElement: {
         classList: { remove: vi.fn(), add: vi.fn(), toggle: vi.fn() },
@@ -84,10 +83,51 @@ describe("loadSettings 旧版本遗留键清理", () => {
       },
       body: { style: {} },
     });
+
+  it("忽略旧 localStorage 残留的 sidebarWidth 键，不将其混入 state", () => {
+    // loadSettings 内部会调用 apply* 系列写 documentElement/body，需按 resetDefaults 用例的方式 stub document
+    stubDoc();
     localStorage.setItem("novaedit-settings", JSON.stringify({ fontSize: 18, sidebarWidth: 999 }));
     useSettingsStore.getState().loadSettings();
     const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
     expect(state.fontSize).toBe(18); // 正常键照常生效
     expect("sidebarWidth" in state).toBe(false); // 遗留键被防御性删除
+  });
+});
+
+describe("loadSettings 设置结构版本迁移", () => {
+  const stubDoc = () =>
+    vi.stubGlobal("document", {
+      documentElement: {
+        classList: { remove: vi.fn(), add: vi.fn(), toggle: vi.fn() },
+        style: { setProperty: vi.fn(), removeProperty: vi.fn() },
+      },
+      body: { style: {} },
+    });
+
+  it("旧版数据（无 settingsVersion）的 showLineEndings:false 是旧系统默认而非用户选择——迁移后采用新默认 true", () => {
+    stubDoc();
+    localStorage.setItem(
+      "novaedit-settings",
+      JSON.stringify({ fontSize: 18, showLineEndings: false })
+    );
+    useSettingsStore.getState().loadSettings();
+    expect(useSettingsStore.getState().showLineEndings).toBe(true);
+  });
+
+  it("新版数据（settingsVersion:1）的 showLineEndings:false 是用户主动选择——保留不覆盖", () => {
+    stubDoc();
+    localStorage.setItem(
+      "novaedit-settings",
+      JSON.stringify({ fontSize: 18, showLineEndings: false, settingsVersion: 1 })
+    );
+    useSettingsStore.getState().loadSettings();
+    expect(useSettingsStore.getState().showLineEndings).toBe(false);
+  });
+
+  it("saveSettings 写盘带上 settingsVersion，之后用户的选择不再被迁移改写", () => {
+    useSettingsStore.getState().saveSettings();
+    const saved = JSON.parse(localStorage.getItem("novaedit-settings")!);
+    expect(saved.settingsVersion).toBe(1);
   });
 });
